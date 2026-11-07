@@ -1,0 +1,287 @@
+{
+  "viewBox": "0 0 200 240",
+  "states": [
+    "listening",
+    "taking_notes",
+    "nodding",
+    "confused",
+    "lost",
+    "bored",
+    "sleeping",
+    "on_phone",
+    "excited",
+    "hand_raised"
+  ],
+  "students": [
+    {
+      "id": 0,
+      "name": "Giulia",
+      "hue": 205,
+      "color": "#6ea0c4",
+      "files": {
+        "listening": "characters/00-giulia-listening.svg",
+        "taking_notes": "characters/00-giulia-taking_notes.svg",
+        "nodding": "characters/00-giulia-nodding.svg",
+        "confused": "characters/00-giulia-confused.svg",
+        "lost": "characters/00-giulia-lost.svg",
+        "bored": "characters/00-giulia-bored.svg",
+        "sleeping": "characters/00-giulia-sleeping.svg",
+        "on_phone": "characters/00-giulia-on_phone.svg",
+        "excited": "characters/00-giulia-excited.svg",
+        "hand_raised": "characters/00-giulia-hand_raised.svg"
+      }
+    },
+    {
+      "id": 1,
+      "name": "Mateo",
+      "hue": 18,
+      "color": "#c4886e",
+      "files": {
+        "listening": "characters/01-mateo-listening.svg",
+        "taking_notes": "characters/01-mateo-taking_notes.svg",
+        "nodding": "characters/01-mateo-nodding.svg",
+        "confused": "characters/01-mateo-confused.svg",
+        "lost": "characters/01-mateo-lost.svg",
+        "bored": "characters/01-mateo-bored.svg",
+        "sleeping": "characters/01-mateo-sleeping.svg",
+        "on_phone": "characters/01-mateo-on_phone.svg",
+        "excited": "characters/01-mateo-excited.svg",
+        "hand_raised": "characters/01-mateo-hand_raised.svg"
+      }
+    },
+    {
+      "id": 2,
+      "name": "Sara",
+      "hue": 150,
+      "color": "#6ec499",
+      "files": {
+        "listening": "characters/02-sara-listening.svg",
+        "taking_notes": "characters/02-sara-taking_notes.svg",
+        "nodding": "characters/02-sara-nodding.svg",
+        "confused": "characters/02-sara-confused.svg",
+        "lost": "characters/02-sara-lost.svg",
+        "bored": "characters/02-sara-bored.svg",
+        "sleeping": "characters/02-sara-sleeping.svg",
+        "on_phone": "characters/02-sara-on_phone.svg",
+        "excited": "characters/02-sara-excited.svg",
+        "hand_raised": "characters/02-sara-hand_raised.svg"
+      }
+    },
+    {
+      "id": 3,
+      "name": "Luca",
+      "hue": 230,
+      "color": "#6e7cc4",
+      "files": {
+        "listening": "characters/03-luca-listening.svg",
+        "taking_notes": "characters/03-luca-taking_notes.svg",
+        "nodding": "characters/03-luca-nodding.svg",
+        "confused": "characters/03-luca-confused.svg",
+        "lost": "characters/03-luca-lost.svg",
+        "bored": "characters/03-luca-bored.svg",
+        "sleeping": "characters/03-luca-sleeping.svg",
+        "on_phone": "characters/03-luca-on_phone.svg",
+        "excited": "characters/03-luca-excited.svg",
+        "hand_raised": "characters/03-luca-hand_raised.svg"
+      }
+    },
+    {
+      "id": 4,
+      "name": "Amira",
+      "hue": 330,
+      "color": "#c46e99",
+      "files": {
+        "listening": "characters/04-amira-listening.svg",
+        "taking_notes": "characters/04-amira-taking_notes.svg",
+        "nodding": "characters/04-amira-nodding.svg",
+        "confused": "characters/04-amira-confused.svg",
+        "lost": "characters/04-amira-lost.svg",
+        "bored": "characters/04-amira-bored.svg",
+        "sleeping": "characters/04-amira-sleeping.svg",
+        "on_phone": "characters/04-amira-on_phone.svg",
+        "excited": "characters/04-amira-excited.svg",
+        "hand_raised": "characters/04-amira-hand_raised.svg"
+      }
+    },
+    {
+      "id": 5,
+      "name": "Paolo",
+      "hue": 40,
+      "color": "#c4a76e",
+      "files": {
+        "listening": "characters/05-paolo-listening.svg",
+        "taking_notes": "characters/05-paolo-taking_notes.svg",
+        "nodding": "characters/05-paolo-nodding.svg",
+        "confused": "characters/05-paolo-confused.svg",
+        "lost": "characters/05-paolo-lost.svg",
+        "bored": "characters/05-paolo-bored.svg",
+        "sleeping": "characters/05-paolo-sleeping.svg",
+        "on_phone": "characters/05-paolo-on_phone.svg",
+        "excited": "characters/05-paolo-excited.svg",
+        "hand_raised": "characters/05-paolo-hand_raised.svg"
+      }
+    },
+    {
+      "id": 6,
+      "name": "Chen",
+      "hue": 250,
+      "color": "#7c6ec4",
+      "files": {
+        "listening": "characters/06-chen-listening.svg",
+        "taking_notes": "characters/06-chen-taking_notes.svg",
+        "nodding": "characters/06-chen-nodding.svg",
+        "confused": "characters/06-chen-confused.svg",
+        "lost": "characters/06-chen-lost.svg",
+        "bored": "characters/06-chen-bored.svg",
+        "sleeping": "characters/06-chen-sleeping.svg",
+        "on_phone": "characters/06-chen-on_phone.svg",
+        "excited": "characters/06-chen-excited.svg",
+        "hand_raised": "characters/06-chen-hand_raised.svg"
+      }
+    },
+    {
+      "id": 7,
+      "name": "Elena",
+      "hue": 280,
+      "color": "#a76ec4",
+      "files": {
+        "listening": "characters/07-elena-listening.svg",
+        "taking_notes": "characters/07-elena-taking_notes.svg",
+        "nodding": "characters/07-elena-nodding.svg",
+        "confused": "characters/07-elena-confused.svg",
+        "lost": "characters/07-elena-lost.svg",
+        "bored": "characters/07-elena-bored.svg",
+        "sleeping": "characters/07-elena-sleeping.svg",
+        "on_phone": "characters/07-elena-on_phone.svg",
+        "excited": "characters/07-elena-excited.svg",
+        "hand_raised": "characters/07-elena-hand_raised.svg"
+      }
+    },
+    {
+      "id": 8,
+      "name": "Marco",
+      "hue": 190,
+      "color": "#6eb6c4",
+      "files": {
+        "listening": "characters/08-marco-listening.svg",
+        "taking_notes": "characters/08-marco-taking_notes.svg",
+        "nodding": "characters/08-marco-nodding.svg",
+        "confused": "characters/08-marco-confused.svg",
+        "lost": "characters/08-marco-lost.svg",
+        "bored": "characters/08-marco-bored.svg",
+        "sleeping": "characters/08-marco-sleeping.svg",
+        "on_phone": "characters/08-marco-on_phone.svg",
+        "excited": "characters/08-marco-excited.svg",
+        "hand_raised": "characters/08-marco-hand_raised.svg"
+      }
+    },
+    {
+      "id": 9,
+      "name": "Fatima",
+      "hue": 355,
+      "color": "#c46e75",
+      "files": {
+        "listening": "characters/09-fatima-listening.svg",
+        "taking_notes": "characters/09-fatima-taking_notes.svg",
+        "nodding": "characters/09-fatima-nodding.svg",
+        "confused": "characters/09-fatima-confused.svg",
+        "lost": "characters/09-fatima-lost.svg",
+        "bored": "characters/09-fatima-bored.svg",
+        "sleeping": "characters/09-fatima-sleeping.svg",
+        "on_phone": "characters/09-fatima-on_phone.svg",
+        "excited": "characters/09-fatima-excited.svg",
+        "hand_raised": "characters/09-fatima-hand_raised.svg"
+      }
+    },
+    {
+      "id": 10,
+      "name": "Tommaso",
+      "hue": 95,
+      "color": "#92c46e",
+      "files": {
+        "listening": "characters/10-tommaso-listening.svg",
+        "taking_notes": "characters/10-tommaso-taking_notes.svg",
+        "nodding": "characters/10-tommaso-nodding.svg",
+        "confused": "characters/10-tommaso-confused.svg",
+        "lost": "characters/10-tommaso-lost.svg",
+        "bored": "characters/10-tommaso-bored.svg",
+        "sleeping": "characters/10-tommaso-sleeping.svg",
+        "on_phone": "characters/10-tommaso-on_phone.svg",
+        "excited": "characters/10-tommaso-excited.svg",
+        "hand_raised": "characters/10-tommaso-hand_raised.svg"
+      }
+    },
+    {
+      "id": 11,
+      "name": "Sofia",
+      "hue": 300,
+      "color": "#c46ec4",
+      "files": {
+        "listening": "characters/11-sofia-listening.svg",
+        "taking_notes": "characters/11-sofia-taking_notes.svg",
+        "nodding": "characters/11-sofia-nodding.svg",
+        "confused": "characters/11-sofia-confused.svg",
+        "lost": "characters/11-sofia-lost.svg",
+        "bored": "characters/11-sofia-bored.svg",
+        "sleeping": "characters/11-sofia-sleeping.svg",
+        "on_phone": "characters/11-sofia-on_phone.svg",
+        "excited": "characters/11-sofia-excited.svg",
+        "hand_raised": "characters/11-sofia-hand_raised.svg"
+      }
+    },
+    {
+      "id": 12,
+      "name": "Davide",
+      "hue": 170,
+      "color": "#6ec4b6",
+      "files": {
+        "listening": "characters/12-davide-listening.svg",
+        "taking_notes": "characters/12-davide-taking_notes.svg",
+        "nodding": "characters/12-davide-nodding.svg",
+        "confused": "characters/12-davide-confused.svg",
+        "lost": "characters/12-davide-lost.svg",
+        "bored": "characters/12-davide-bored.svg",
+        "sleeping": "characters/12-davide-sleeping.svg",
+        "on_phone": "characters/12-davide-on_phone.svg",
+        "excited": "characters/12-davide-excited.svg",
+        "hand_raised": "characters/12-davide-hand_raised.svg"
+      }
+    },
+    {
+      "id": 13,
+      "name": "Nadia",
+      "hue": 265,
+      "color": "#926ec4",
+      "files": {
+        "listening": "characters/13-nadia-listening.svg",
+        "taking_notes": "characters/13-nadia-taking_notes.svg",
+        "nodding": "characters/13-nadia-nodding.svg",
+        "confused": "characters/13-nadia-confused.svg",
+        "lost": "characters/13-nadia-lost.svg",
+        "bored": "characters/13-nadia-bored.svg",
+        "sleeping": "characters/13-nadia-sleeping.svg",
+        "on_phone": "characters/13-nadia-on_phone.svg",
+        "excited": "characters/13-nadia-excited.svg",
+        "hand_raised": "characters/13-nadia-hand_raised.svg"
+      }
+    },
+    {
+      "id": 14,
+      "name": "Riccardo",
+      "hue": 28,
+      "color": "#c4966e",
+      "files": {
+        "listening": "characters/14-riccardo-listening.svg",
+        "taking_notes": "characters/14-riccardo-taking_notes.svg",
+        "nodding": "characters/14-riccardo-nodding.svg",
+        "confused": "characters/14-riccardo-confused.svg",
+        "lost": "characters/14-riccardo-lost.svg",
+        "bored": "characters/14-riccardo-bored.svg",
+        "sleeping": "characters/14-riccardo-sleeping.svg",
+        "on_phone": "characters/14-riccardo-on_phone.svg",
+        "excited": "characters/14-riccardo-excited.svg",
+        "hand_raised": "characters/14-riccardo-hand_raised.svg"
+      }
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+<!doctype html><meta charset="utf-8"><title>Characters preview</title>
+<style>body{font-family:system-ui;background:#fbfaf7;margin:16px;color:#1d1b2b}h2{margin:18px 0 6px}
+.row{display:grid;grid-template-columns:repeat(10,1fr);gap:4px}.c{text-align:center;font-size:11px}img{width:100%;}</style>
+<div id="o"></div>
+<script>
+fetch("index.json").then(r=>r.json()).then(ix=>{
+  o.innerHTML = `<div class="row">${ix.states.map(s=>`<div class="c"><b>${s}</b></div>`).join("")}</div>` +
+  ix.students.map(st=>`<h2>${st.id} ${st.name}</h2><div class="row">${ix.states.map(s=>`<div class="c"><img src="${st.files[s].replace('characters/','')}"></div>`).join("")}</div>`).join("");
+});
+</script>
