@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { LOOKS } from "../lib/characters";
-import { STATES, type ChunkResult, type Persona, type Report, type Session, type StudentState, type StudentStateName } from "../lib/types";
+import { STATES, STATE_MOOD, STATE_WORDS, type Analysis, type ChunkResult, type Persona, type Report, type Session, type StudentState, type StudentStateName } from "../lib/types";
 import Student from "./Student";
 import styles from "./Classroom.module.css";
 
@@ -32,7 +32,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 type Speaking = { id: number; says: string; action: string } | null;
 
 const initialStates = (): Record<number, StudentState> =>
-  Object.fromEntries(LOOKS.map((l) => [l.id, { id: l.id, attention: 80, confusion: 10, state: "listening", bubble: "🙂", reason: "Start of lecture" }]));
+  Object.fromEntries(LOOKS.map((l) => [l.id, { id: l.id, attention: 80, confusion: 10, state: "listening", reason: "Start of lecture" }]));
 
 export default function Classroom() {
   const [personas, setPersonas] = useState<Persona[]>([]);
@@ -52,6 +52,9 @@ export default function Classroom() {
   const [reportBusy, setReportBusy] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
+  const [analysis, setAnalysis] = useState<Analysis | null>(null);
+  const [slideFile, setSlideFile] = useState<File | null>(null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
   const sessionRef = useRef<Session | null>(null);
   const slideRef = useRef<number | null>(null);
@@ -95,7 +98,7 @@ export default function Classroom() {
         await sleep(Math.max(0, 2500 - (performance.now() - started)));
         setSpeaking(null);
         // after asking, the hand comes down
-        setStudents((s) => s[sp.id]?.state === "hand_raised" ? { ...s, [sp.id]: { ...s[sp.id], state: "listening", bubble: "🙂" } } : s);
+        setStudents((s) => s[sp.id]?.state === "hand_raised" ? { ...s, [sp.id]: { ...s[sp.id], state: "listening" } } : s);
       }
     });
   }, [backend]);
@@ -105,7 +108,7 @@ export default function Classroom() {
     setStudents((prev) => {
       const next = { ...prev };
       for (const s of r.students) next[s.id] = s;
-      for (const sp of r.speakers) if (sp.action !== "whisper_to_neighbour") next[sp.id] = { ...next[sp.id], state: "hand_raised", bubble: "✋" };
+      for (const sp of r.speakers) if (sp.action !== "whisper_to_neighbour") next[sp.id] = { ...next[sp.id], state: "hand_raised" };
       return next;
     });
     setStats({ attention: r.class_attention, confusion: r.class_confusion, summary: r.summary });
@@ -174,9 +177,14 @@ export default function Classroom() {
     }
   }
 
-  async function start(): Promise<Session | null> {
+  async function start(file: File | null = slideFile): Promise<Session | null> {
     try {
-      const s = await api.createSession(course, slidesText);
+      const s = await api.createSession(course, slidesText, file);
+      setPdfUrl((old) => {
+        if (old) URL.revokeObjectURL(old);
+        return file && file.name.toLowerCase().endsWith(".pdf") ? URL.createObjectURL(file) : null;
+      });
+      setAnalysis(null);
       sessionRef.current = s;
       slideRef.current = s.slides.length ? 0 : null;
       setSession(s);
@@ -188,7 +196,10 @@ export default function Classroom() {
       note(`Session ${s.id} · ${s.slides.length} slides`);
       if (s.slides.length) {
         note("Analysing slides…");
-        api.analyze(s.id).then((a) => a.slides.forEach((x) => note(`slide ${x.index + 1} · risk ${x.risk} · ${x.top_issue ?? "ok"}`))).catch(() => {});
+        api.analyze(s.id).then((a) => {
+          setAnalysis(a);
+          a.slides.forEach((x) => note(`slide ${x.index + 1} · risk ${x.risk} · ${x.top_issue ?? "ok"}`));
+        }).catch(() => {});
       }
       return s;
     } catch (e) {
@@ -198,6 +209,18 @@ export default function Classroom() {
   }
 
   /** The one big button: starts a session with the current setup if needed, then the mic. */
+  async function uploadSlides(file: File | undefined) {
+    if (!file) return;
+    setSlideFile(file);
+    if (recordingRef.current) await toggleMic();
+    await start(file);
+  }
+
+  function goToSlide(delta: number) {
+    if (!session || !session.slides.length) return;
+    setSlideIndex((i) => Math.min(session.slides.length - 1, Math.max(0, (i ?? 0) + delta)));
+  }
+
   async function startTalking() {
     if (!recordingRef.current && !sessionRef.current && !(await start())) return;
     await toggleMic();
@@ -228,8 +251,12 @@ export default function Classroom() {
   function demoRaiseHand() {
     const candidates = LOOKS.filter((l) => students[l.id].state !== "hand_raised");
     const who = candidates[Math.floor(Math.random() * candidates.length)];
-    setStudents((s) => ({ ...s, [who.id]: { ...s[who.id], state: "hand_raised", bubble: "✋" } }));
+    setStudents((s) => ({ ...s, [who.id]: { ...s[who.id], state: "hand_raised" } }));
     say({ id: who.id, says: DEMO_QUESTIONS[Math.floor(Math.random() * DEMO_QUESTIONS.length)], action: "raise_hand" });
+  }
+
+  function demoAllHands() {
+    setStudents((s) => Object.fromEntries(Object.values(s).map((st) => [st.id, { ...st, state: "hand_raised" as StudentStateName }])));
   }
 
   function demoShuffle() {
@@ -268,14 +295,6 @@ export default function Classroom() {
         </div>
 
         <div className={styles.tools}>
-          {session && session.slides.length > 0 && (
-            <label>
-              <span className={styles.srOnly}>Current slide</span>
-              <select value={slideIndex ?? ""} onChange={(e) => setSlideIndex(e.target.value === "" ? null : Number(e.target.value))}>
-                {session.slides.map((sl) => <option key={sl.index} value={sl.index}>Slide {sl.index + 1}</option>)}
-              </select>
-            </label>
-          )}
           {session && <button onClick={getReport} disabled={reportBusy}>{reportBusy ? "Building…" : "Report"}</button>}
           {session && <button onClick={resetClass}>Reset</button>}
           <button onClick={() => setSetupOpen(true)}>Setup</button>
@@ -287,11 +306,50 @@ export default function Classroom() {
       </header>
 
       <main className={styles.room}>
-        <div className={styles.board}>
-          <p className={styles.boardLabel}>{slide ? `Slide ${slide.index + 1} of ${session?.slides.length}` : "Whiteboard"}</p>
-          <p className={styles.boardTitle}>{slide?.title ?? "Press Start talking and teach your class"}</p>
-          {stats?.summary && <p className={styles.boardSummary}>{stats.summary}</p>}
-        </div>
+        <aside className={styles.deck} aria-label="Presentation">
+          <div className={styles.deckHead}>
+            <h2>Presentation</h2>
+            {session && session.slides.length > 0 && (
+              <div className={styles.deckNav}>
+                <button onClick={() => goToSlide(-1)} disabled={!slideIndex} aria-label="Previous slide">‹</button>
+                <span>{(slideIndex ?? 0) + 1} / {session.slides.length}</span>
+                <button onClick={() => goToSlide(1)} disabled={slideIndex === session.slides.length - 1} aria-label="Next slide">›</button>
+              </div>
+            )}
+          </div>
+
+          <div className={styles.screen}>
+            {pdfUrl && slide ? (
+              <iframe key={slide.index} title={`Slide ${slide.index + 1}`} src={`${pdfUrl}#page=${slide.index + 1}&toolbar=0&navpanes=0&view=Fit`} />
+            ) : slide ? (
+              <div className={styles.slideCard}>
+                <h3>{slide.title}</h3>
+                <p>{slide.text.split("\n").slice(1).join("\n")}</p>
+              </div>
+            ) : (
+              <div className={styles.slideEmpty}>
+                <p>Upload your slides, or press Start talking to rehearse without them.</p>
+              </div>
+            )}
+          </div>
+
+          <label className={styles.upload}>
+            <input type="file" accept=".pdf,.pptx,.txt" onChange={(e) => uploadSlides(e.target.files?.[0])} />
+            Upload slides (PDF, PPTX)
+          </label>
+
+          {slide && analysis && (() => {
+            const risk = analysis.slides.find((x) => x.index === slide.index);
+            return risk ? (
+              <div className={styles.risk}>
+                <span className={styles.riskLabel}>Predicted difficulty</span>
+                <span className={styles.riskTrack}><i style={{ width: `${risk.risk}%` }} /></span>
+                {risk.top_issue && <p>{risk.top_issue}</p>}
+              </div>
+            ) : null;
+          })()}
+          {stats?.summary && <p className={styles.heard}><b>The class heard:</b> {stats.summary}</p>}
+        </aside>
 
         <div className={styles.rows}>
           {ROWS.map((row) => (
@@ -307,12 +365,12 @@ export default function Classroom() {
                         {speaking.says}
                       </div>
                     )}
-                    <span key={st.bubble} className={styles.emoji} aria-hidden="true">{st.bubble}</span>
                     <div className={styles.figure}>
                       <Student id={id} state={st.state} waving={talking} />
                     </div>
                     <div className={styles.desk}>
                       <span className={styles.name}>{nameOf(id)}</span>
+                      <span className={`${styles.mood} ${styles[STATE_MOOD[st.state]]}`}>{STATE_WORDS[st.state]}</span>
                       <span className={styles.bar} aria-label={`attention ${st.attention}`}>
                         <i style={{ width: `${st.attention}%` }} />
                       </span>
@@ -357,7 +415,7 @@ export default function Classroom() {
               <textarea rows={7} value={slidesText} onChange={(e) => setSlidesText(e.target.value)} />
             </label>
             <div className={styles.actions}>
-              <button className={styles.primary} onClick={start} disabled={backend === "offline" || backend === "checking"}>
+              <button className={styles.primary} onClick={() => start()} disabled={backend === "offline" || backend === "checking"}>
                 {session ? "Start a new session" : "Start session"}
               </button>
             </div>
@@ -365,6 +423,7 @@ export default function Classroom() {
             <p className={styles.muted}>These work without a session, handy during the pitch.</p>
             <div className={styles.actions}>
               <button onClick={() => { setSetupOpen(false); demoRaiseHand(); }}>Raise a hand</button>
+              <button onClick={() => { setSetupOpen(false); demoAllHands(); }}>Everyone raises a hand</button>
               <button onClick={() => { setSetupOpen(false); demoShuffle(); }}>Shuffle moods</button>
             </div>
           </div>

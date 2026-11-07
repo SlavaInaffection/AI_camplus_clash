@@ -1,6 +1,6 @@
 // Thin client for the FastAPI backend, proxied by Next at /api (see next.config.ts).
 
-import type { ChunkResult, Persona, Report, Session } from "./types";
+import type { Analysis, ChunkResult, Persona, Report, Session } from "./types";
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const r = await fetch(`/api${path}`, init);
@@ -16,13 +16,14 @@ export const api = {
   health: () => call<{ ok: boolean; mock: boolean; models: Record<string, string> }>("/health"),
   personas: () => call<Persona[]>("/personas"),
 
-  createSession(course: string, slidesText: string) {
+  createSession(course: string, slidesText: string, file?: File | null) {
     const fd = new FormData();
     fd.append("course", course);
-    if (slidesText.trim()) fd.append("slides_text", slidesText);
+    if (file) fd.append("file", file, file.name);
+    else if (slidesText.trim()) fd.append("slides_text", slidesText);
     return call<Session>("/sessions", { method: "POST", body: fd });
   },
-  analyze: (id: string) => call<{ slides: { index: number; risk: number; top_issue: string | null }[] }>(`/sessions/${id}/analyze`, { method: "POST" }),
+  analyze: (id: string) => call<Analysis>(`/sessions/${id}/analyze`, { method: "POST" }),
   chunk: (id: string, text: string, slideIndex: number | null) => call<ChunkResult>(`/sessions/${id}/chunk`, json({ text, slide_index: slideIndex })),
   report: (id: string) => call<Report>(`/sessions/${id}/report`, { method: "POST" }),
   reset: (id: string) => call<Session>(`/sessions/${id}/reset`, { method: "POST" }),

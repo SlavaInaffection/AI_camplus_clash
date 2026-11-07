@@ -22,7 +22,6 @@ interface Pose {
   tilt: number;
   left: ArmPose;
   right: ArmPose;
-  rightOverHead?: boolean; // hand to chin / cheek: drawn over the face
   prop?: "notebook" | "phone" | "sweat" | "zzz";
   handsOnProp?: boolean;
 }
@@ -31,9 +30,9 @@ const POSES: Record<StudentStateName, Pose> = {
   listening: { tilt: 0, left: { angle: 8, length: 46 }, right: { angle: -8, length: 46 } },
   taking_notes: { tilt: 4, left: { angle: -23, length: 30 }, right: { angle: 23, length: 30 }, prop: "notebook", handsOnProp: true },
   nodding: { tilt: -6, left: { angle: 8, length: 46 }, right: { angle: -8, length: 46 } },
-  confused: { tilt: -8, left: { angle: 8, length: 46 }, right: { angle: 150, length: 34 }, rightOverHead: true },
+  confused: { tilt: -8, left: { angle: 8, length: 46 }, right: { angle: 150, length: 34 } },
   lost: { tilt: 5, left: { angle: 13, length: 46 }, right: { angle: -13, length: 46 }, prop: "sweat" },
-  bored: { tilt: -10, left: { angle: 8, length: 46 }, right: { angle: 128, length: 30 }, rightOverHead: true },
+  bored: { tilt: -10, left: { angle: 8, length: 46 }, right: { angle: 128, length: 30 } },
   sleeping: { tilt: 16, left: { angle: 5, length: 46 }, right: { angle: -5, length: 46 }, prop: "zzz" },
   on_phone: { tilt: 8, left: { angle: -40, length: 31 }, right: { angle: 40, length: 31 }, prop: "phone", handsOnProp: true },
   excited: { tilt: -4, left: { angle: 140, length: 46 }, right: { angle: -140, length: 46 } },
@@ -247,9 +246,43 @@ function Prop({ kind, c }: { kind: Pose["prop"]; c: Palette }) {
       return <path className={styles.drip} d="M150,58 Q158,70 154,76 Q148,80 145,74 Q144,68 150,58 Z" fill="#9fd8ff" />;
     case "zzz":
       return <g className={styles.zzz}>
-        <path d="M148,40 L160,40 L148,52 L160,52" fill="none" stroke={c.clothDark} strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M164,20 L174,20 L164,30 L174,30" fill="none" stroke={c.clothDark} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M146,44 L162,44 L146,60 L162,60" fill="none" stroke={c.clothDark} strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M166,20 L178,20 L166,32 L178,32" fill="none" stroke={c.clothDark} strokeWidth={3.4} strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M182,2 L190,2 L182,10 L190,10" fill="none" stroke={c.clothDark} strokeWidth={2.8} strokeLinecap="round" strokeLinejoin="round" />
       </g>;
+    default:
+      return null;
+  }
+}
+
+const star = (cx: number, cy: number, r: number) =>
+  `M${cx},${cy - r} Q${cx},${cy} ${cx + r},${cy} Q${cx},${cy} ${cx},${cy + r} Q${cx},${cy} ${cx - r},${cy} Q${cx},${cy} ${cx},${cy - r} Z`;
+
+/** A small drawn sign above the head so the state reads at a glance (no emoji). */
+function Cue({ state, c }: { state: StudentStateName; c: Palette }) {
+  switch (state) {
+    case "confused":
+      return <g className={styles.bob}>
+        <path d="M156,22 Q156,8 168,8 Q180,8 180,20 Q180,28 170,32 L170,38" fill="none" stroke={c.hairDark} strokeWidth={5} strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx={170} cy={48} r={3.4} fill={c.hairDark} />
+      </g>;
+    case "lost":
+      return <path className={styles.spin} d="M168,24 m-3,0 a3,3 0 1,1 6,0 a6,6 0 1,1 -12,0 a9,9 0 1,1 18,0 a12,12 0 1,1 -24,0"
+        fill="none" stroke={c.hairDark} strokeWidth={3} strokeLinecap="round" />;
+    case "excited":
+      return <g className={styles.twinkle}>
+        <path d={star(166, 26, 11)} fill="#f5b400" />
+        <path d={star(36, 34, 7)} fill="#f5b400" />
+        <path d={star(150, 6, 5)} fill="#f5b400" />
+      </g>;
+    case "bored":
+      return <g className={styles.bob}>
+        <circle cx={154} cy={30} r={3.5} fill={c.clothDark} />
+        <circle cx={165} cy={24} r={3.5} fill={c.clothDark} />
+        <circle cx={176} cy={18} r={3.5} fill={c.clothDark} />
+      </g>;
+    case "nodding":
+      return <path className={styles.bob} d="M156,24 L164,32 L180,14" fill="none" stroke="#2f9e44" strokeWidth={5} strokeLinecap="round" strokeLinejoin="round" />;
     default:
       return null;
   }
@@ -295,12 +328,6 @@ export default function Student({ id, state, waving, className }: StudentProps) 
           <rect x={112} y={142} width={14} height={30} rx={6} fill={c.accent} />
         </>}
         <Arm c={c} at={L} pose={pose.left} />
-        {!pose.rightOverHead && rightArm}
-        {pose.handsOnProp && <>
-          <Prop kind={pose.prop} c={c} />
-          <circle cx={leftHand.x} cy={leftHand.y} r={8.5} fill={c.skin} />
-          <circle cx={rightHand.x} cy={rightHand.y} r={8.5} fill={c.skin} />
-        </>}
         {/* head */}
         <g style={headStyle}>
           <g className={styles.head}>
@@ -312,8 +339,16 @@ export default function Student({ id, state, waving, className }: StudentProps) 
             <Glasses acc={look.accessories} c={c} />
           </g>
         </g>
-        {pose.rightOverHead && rightArm}
+        {/* the right arm is always drawn over the head, so a raised hand is never hidden by
+            hair, a hood or a cap brim, and it stays the same element so the raise animates */}
+        {rightArm}
+        {pose.handsOnProp && <>
+          <Prop kind={pose.prop} c={c} />
+          <circle cx={leftHand.x} cy={leftHand.y} r={8.5} fill={c.skin} />
+          <circle cx={rightHand.x} cy={rightHand.y} r={8.5} fill={c.skin} />
+        </>}
         {!pose.handsOnProp && <Prop kind={pose.prop} c={c} />}
+        <Cue state={state} c={c} />
       </g>
     </svg>
   );

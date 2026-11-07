@@ -21,7 +21,7 @@ export interface StudentState {
   attention: number;
   confusion: number;
   state: StudentStateName;
-  bubble: string;
+  bubble?: string;
   reason: string;
 }
 
@@ -63,3 +63,20 @@ export interface Report {
     selection: { chosen_agent: string; final_fix: string; reasoning: string };
   }[];
 }
+
+export interface Analysis {
+  slides: { index: number; title: string; risk: number; top_issue: string | null }[];
+  issues: { slide_index: number; dimension: string; severity: number; problem: string; principle: string; suggestion: string }[];
+}
+
+/** Short words for the desk label: what this student is like right now. */
+export const STATE_WORDS: Record<StudentStateName, string> = {
+  listening: "following", taking_notes: "taking notes", nodding: "gets it", confused: "confused", lost: "lost",
+  bored: "bored", sleeping: "sleepy", on_phone: "on the phone", excited: "hooked", hand_raised: "has a question",
+};
+
+/** good / meh / bad, for the colour of the desk label */
+export const STATE_MOOD: Record<StudentStateName, "good" | "meh" | "bad"> = {
+  listening: "good", taking_notes: "good", nodding: "good", excited: "good", hand_raised: "good",
+  confused: "meh", bored: "meh", lost: "bad", sleeping: "bad", on_phone: "bad",
+};

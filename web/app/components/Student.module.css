@@ -63,6 +63,24 @@
   animation: drip 1.6s ease-in infinite;
 }
 
+.bob { animation: bob 1.6s ease-in-out infinite; }
+.spin { transform-box: fill-box; transform-origin: center; animation: spin 2.4s linear infinite; }
+.twinkle { animation: twinkle 1.1s ease-in-out infinite; }
+
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .35; }
+}
+
 @keyframes breathe {
   0%, 100% { transform: scale(1, 1); }
   50% { transform: scale(1.012, 0.988); }
@@ -123,5 +141,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .body, .head, .wave, .blink, .zzz, .drip, .pop, .fadeIn { animation: none !important; }
+  .body, .head, .wave, .blink, .zzz, .drip, .pop, .fadeIn, .bob, .spin, .twinkle { animation: none !important; }
 }
