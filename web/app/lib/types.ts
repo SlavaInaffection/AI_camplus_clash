@@ -40,6 +40,8 @@ export interface ChunkResult {
   summary: string;
   class_attention: number;
   class_confusion: number;
+  /** Set when input guardrails refuse an out-of-scope request. */
+  boundary_held?: string | null;
 }
 
 export interface Slide {

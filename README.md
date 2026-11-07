@@ -1,87 +1,133 @@
 # 🎭 Rehearsal Room
 
-**A flight simulator for teaching.** A lecturer rehearses in front of 15 simulated students. Each one reacts according to their situation and to learning-science principles. They get lost, fall asleep, raise their hand and ask questions. Afterwards the lecturer sees who they lost, when, and why, plus fixes proposed and compared by several agents.
+**A flight simulator for teaching (and presentation rehearsal).**  
+You teach your slides to a live class of **10 AI students**. Each one has a real situation (Erasmus listener, dyslexia, missed last week, misconception, …). They react, sometimes ask, and afterwards you see who you lost — and how to fix it.
 
-> These are predictions based on learning-science principles. They are not measurements of real students.
+> Predictions from learning-science principles — not measurements of real students.
 
-## Agents
+**Hackathon:** Student Tech Clash 2026 · AI on Campus · **Coding path**  
+**Level 2 map for judges:** [LEVEL2.md](./LEVEL2.md)
 
-```
-BEFORE   slides ──► 4 analysts in parallel (Attention · Cognitive Load · Prerequisites · Memory) ──► risk per slide
-DURING   transcript chunk ──► Director (updates all 15, picks 0-2 speakers) ──► Student agents (parallel) speak
-AFTER    lost moments ──► 3 Fix agents (Example · Visual · Structure) ──► Fix Evaluator ──► Coach summary
-```
+---
 
-Every agent step is logged to `logs/trace.jsonl`.
+## Demo for judges
 
-## Run
+| What | URL / path |
+|------|------------|
+| **Interactive classroom** | http://localhost:3000 |
+| **API docs** | http://localhost:8000/docs |
+| **Example interactions (+ boundary)** | [examples/interactions.md](./examples/interactions.md) |
+| **Architecture** | [§ Architecture](#architecture) below |
 
 ```bash
-uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -r requirements.txt
-cp .env.example .env          # add OPENAI_API_KEY, or set REHEARSAL_MOCK=1
+# API
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+cp .env.example .env          # set OPENAI_API_KEY, or REHEARSAL_MOCK=1
 .venv/bin/uvicorn server:app --reload --port 8000
+
+# UI (separate terminal)
+cd web && npm install && npm run dev
 ```
 
-Open http://localhost:8000/docs to try every endpoint.
+Optional: `brew install --cask libreoffice` so uploaded **PPTX** renders as real slide images (PDF works without it).
 
-**Real slides:** uploaded PDF and PPTX decks are shown as the actual slides, rendered to images on the server. PPTX needs LibreOffice, which converts it headless the way web apps do:
+---
 
-```bash
-brew install --cask libreoffice
+## Architecture
+
+```
+INPUT
+  mic / typed transcript  (+ optional PDF·PPTX·text slides)
+       │
+       ▼
+GUARDRAILS (code) ────────────────────────────────────────────┐
+  cheat · admin/logistics · jailbreak · harm → boundary_held   │
+       │ (only if allowed)                                     │
+       ▼                                                       │
+KNOWLEDGE                                                      │
+  course · cleaned slide text · 10 personas · prior states     │
+  · optional pre-analysis (4 learning-science analysts)        │
+       │                                                       │
+       ▼                                                       │
+ORCHESTRATOR = Director (1 LLM call / chunk)                   │
+  plan → update every student → pick 0–1 speaker               │
+  tools: none external; memory = session states + chunk log    │
+       │                                                       │
+       ▼                                                       │
+DECISIONS                                                      │
+  attention / confusion / state per student                    │
+  rare grounded question (rotated; Chen rarely public)         │
+       │                                                       │
+       ▼                                                       │
+OUTPUT                                                         │
+  /chunk JSON → Next.js classroom (faces, !, TTS)              │
+  /report → lost moments · fix agents · coach                  │
+  logs/trace.jsonl ← every agent step                          │
+       ▲                                                       │
+       └──────────── refused requests jump here with           │
+                     boundary_held (no LLM, class unchanged) ──┘
 ```
 
-**Mock mode:** without `OPENAI_API_KEY`, or with `REHEARSAL_MOCK=1`, every agent returns fake but changing data. Use it to build the frontend without spending tokens.
+**Minimum “real agent” stack:** orchestrator (Director) + LLM + tools/guardrails (code) + memory (session JSON).
 
-## API
+### Models & libraries
 
-| Method | Path | What it does |
-|---|---|---|
+| Role | Default model | When |
+|------|---------------|------|
+| Director (live) | `gpt-4.1-mini` | Every ~4s transcript chunk |
+| Analysts | `gpt-4.1` | Optional pre-lecture slide review |
+| Coach / fixers | `gpt-4.1` | Post-rehearsal report |
+| STT | `gpt-4o-mini-transcribe` | Mic chunks |
+| TTS | `gpt-4o-mini-tts` | Student speech |
+
+Configured via `.env` (see `.env.example`).  
+**Libraries:** FastAPI, OpenAI SDK, Pydantic, pypdf, python-pptx, Next.js 16 / React 19.
+
+### Custom logic (not “just a chatbot”)
+
+- **Personas + seats** — [`rehearsal/personas.py`](./rehearsal/personas.py)  
+- **Director + cooldowns + calm tempering** — [`rehearsal/classroom.py`](./rehearsal/classroom.py)  
+- **Guardrails (boundary)** — [`rehearsal/guardrails.py`](./rehearsal/guardrails.py)  
+- **Slide text cleaner** — [`rehearsal/slides.py`](./rehearsal/slides.py)  
+- **Slide image render** — [`rehearsal/render.py`](./rehearsal/render.py)  
+- **UI live loop** — [`web/app/components/Classroom.tsx`](./web/app/components/Classroom.tsx)
+
+---
+
+## Agents (pipeline)
+
+```
+BEFORE   slides ──► 4 analysts (Attention · Load · Prerequisites · Memory) ──► risk / slide
+DURING   transcript ──► guardrails ──► Director ──► 0–1 speaker (+ TTS)
+AFTER    lost moments ──► 3 Fix agents ──► Fix Evaluator ──► Coach
+```
+
+---
+
+## API (short)
+
+| Method | Path | What |
+|--------|------|------|
 | GET | `/api/health` | `{ok, mock, models}` |
-| GET | `/api/personas` | The 15 students: `id, name, emoji, seat:[row,col], situation, ...` |
-| POST | `/api/sessions` | Form fields: `course`, plus either `file` (PDF/PPTX/TXT) or `slides_text` (slides separated by `---`). Both are optional. |
-| POST | `/api/sessions/{id}/analyze` | Runs the slide analysis (the 4 analysts) |
-| POST | `/api/sessions/{id}/chunk` | `{"text": "...", "slide_index": 2}`. Send about 10 seconds of transcript. Returns the classroom state. |
-| POST | `/api/sessions/{id}/report` | Who you lost, when, and the fixes |
-| POST | `/api/sessions/{id}/reset` | Start the rehearsal again with the same slides |
+| GET | `/api/personas` | Class roster (10 students in the room) |
+| POST | `/api/sessions` | `course` + optional `file` / `slides_text` |
+| POST | `/api/sessions/{id}/analyze` | Pre-lecture analysts |
+| POST | `/api/sessions/{id}/chunk` | Transcript → class update **or** `boundary_held` |
+| POST | `/api/sessions/{id}/report` | Coach + fixes |
+| POST | `/api/transcribe` | Audio → text |
+| POST | `/api/speak` | Student line → MP3 |
 
-**Slides-only mode** (no microphone): send each slide's own text to `/chunk` with its `slide_index`.
-
-### `/chunk` response: the contract the 3D classroom consumes
-
-```json
-{
-  "chunk_index": 3,
-  "slide_index": 1,
-  "students": [
-    {"id": 1, "attention": 55, "confusion": 70, "state": "confused", "bubble": "🤔",
-     "reason": "Jargon 'type I error' never written down; B1 listener"}
-  ],
-  "speakers": [
-    {"id": 1, "action": "raise_hand", "says": "Sorry, what is a type I error?", "why": "..."}
-  ],
-  "summary": "Introduced hypothesis testing terms",
-  "class_attention": 62,
-  "class_confusion": 41
-}
-```
-
-`state` is one of: `listening, taking_notes, nodding, confused, lost, bored, sleeping, on_phone, excited, hand_raised`
-`action` is one of: `raise_hand, interrupt, whisper_to_neighbour`
-
-## Frontend (Next.js, `web/`)
-
-The animated classroom: 15 students at desks, animated live from `/chunk`. Students raise their hand and speak in their own voice.
+Regenerate judge examples (mock, no API key):
 
 ```bash
-.venv/bin/uvicorn server:app --port 8000   # backend
-cd web && npm install && npm run dev        # http://localhost:3000
+REHEARSAL_MOCK=1 .venv/bin/python tools/demo_interactions.py
 ```
 
-Next proxies `/api/*` to the backend (`BACKEND_URL`, default `http://localhost:8000`). The **Demo** buttons (Raise a hand, Shuffle moods) work without starting a session.
+---
 
-- `web/app/components/Student.tsx`: one animated student. Arms, head and props transition between the 10 states.
-- `web/app/components/Classroom.tsx`: the room, the mic loop, the voices and the report.
+## Frontend
 
-## Static test page
+Animated classroom in `web/`: desks, states, hand-raise, voices, presentation panel, report.  
+Next proxies `/api/*` → `http://localhost:8000` (`BACKEND_URL`).
 
-Put the 3D classroom in `frontend/index.html`. The server serves it at `/` automatically, so there are no CORS issues (CORS is open anyway).
+Legacy voice grid: http://localhost:8000/voice-test.html

@@ -19,7 +19,10 @@ from rehearsal.llm import MOCK, MODELS, AgentError
 from rehearsal.personas import BY_ID, PERSONAS
 from rehearsal.schemas import ChunkResult, LectureAnalysis, RehearsalReport
 
-app = FastAPI(title="Rehearsal Room", description="A flight simulator for teaching: 15 AI students react to your lecture.")
+app = FastAPI(
+    title="Rehearsal Room",
+    description="A flight simulator for teaching: AI students react to your lecture. Coding path · Student Tech Clash 2026.",
+)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
@@ -105,7 +108,7 @@ class ChunkIn(BaseModel):
 
 @app.post("/api/sessions/{session_id}/chunk", response_model=ChunkResult)
 def chunk(session_id: str, body: ChunkIn):
-    """Send ~10 seconds of transcript. Returns the new state of all 15 students and who speaks up."""
+    """Send ~4 seconds of transcript. Returns classroom state, optional speaker, or a boundary refusal."""
     if not body.text.strip():
         raise HTTPException(400, "Empty transcript chunk")
     return classroom.process_chunk(_session(session_id), body.text.strip(), body.slide_index)

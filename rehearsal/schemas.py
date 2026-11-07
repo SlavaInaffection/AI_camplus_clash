@@ -101,6 +101,8 @@ class ChunkResult(BaseModel):
     summary: str
     class_attention: int
     class_confusion: int
+    # Set when input guardrails refuse the request (Level 2: holding the boundary).
+    boundary_held: Optional[str] = None
 
 
 # --- After the rehearsal ----------------------------------------------------

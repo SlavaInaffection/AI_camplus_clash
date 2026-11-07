@@ -181,6 +181,11 @@ export default function Classroom() {
 
   // --- applying a /chunk result ---
   const apply = useCallback((r: ChunkResult) => {
+    if (r.boundary_held) {
+      note(`🛡️ ${r.boundary_held}`);
+      setStats({ attention: r.class_attention, confusion: r.class_confusion, summary: r.boundary_held });
+      return;
+    }
     setStudents((prev) => {
       const next = { ...prev };
       for (const s of r.students) {

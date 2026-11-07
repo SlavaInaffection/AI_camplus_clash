@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 from . import mock
+from .guardrails import check_input, sanitize_line
 from .llm import ask
 from .personas import BY_ID, PERSONAS, initial_states
 from .schemas import (
@@ -303,8 +304,36 @@ def speak(session: Session, turn: DirectorTurn, text: str, slide_index: Optional
 
 
 def process_chunk(session: Session, text: str, slide_index: Optional[int]) -> ChunkResult:
+    gate = check_input(text)
+    if not gate.allowed:
+        # Hold the boundary without spending tokens or moving the class.
+        students = [
+            StudentState(
+                id=s["id"], attention=s["attention"], confusion=s["confusion"],
+                state=s["state"], bubble=s.get("bubble", "🙂"),
+                reason="No change — boundary held",
+            )
+            for s in session.states
+        ]
+        result = ChunkResult(
+            chunk_index=len(session.chunks),
+            slide_index=slide_index,
+            students=students,
+            speakers=[],
+            summary=gate.reason or "Boundary held.",
+            class_attention=round(sum(s.attention for s in students) / len(students)),
+            class_confusion=round(sum(s.confusion for s in students) / len(students)),
+            boundary_held=gate.reason,
+        )
+        session.chunks.append({"text": text, "slide_index": slide_index, "result": result, "boundary": True})
+        return result
+
     turn = direct(session, text, slide_index)
     speakers = speak(session, turn, text, slide_index)
+    speakers = [
+        Speaker(id=sp.id, action=sp.action, says=sanitize_line(sp.says), why=sanitize_line(sp.why, 120))
+        for sp in speakers
+    ]
     states = [s.model_dump() for s in turn.students]
     result = ChunkResult(
         chunk_index=len(session.chunks),
