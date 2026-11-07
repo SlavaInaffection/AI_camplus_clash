@@ -24,6 +24,12 @@ cp .env.example .env          # add OPENAI_API_KEY, or set REHEARSAL_MOCK=1
 
 Open http://localhost:8000/docs to try every endpoint.
 
+**Real slides:** uploaded PDF and PPTX decks are shown as the actual slides, rendered to images on the server. PPTX needs LibreOffice, which converts it headless the way web apps do:
+
+```bash
+brew install --cask libreoffice
+```
+
 **Mock mode:** without `OPENAI_API_KEY`, or with `REHEARSAL_MOCK=1`, every agent returns fake but changing data. Use it to build the frontend without spending tokens.
 
 ## API

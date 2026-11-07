@@ -1,7 +1,7 @@
 """Turn an uploaded deck into one PNG per slide, so the app shows the real slides.
 
 PDF  -> pages rendered with pypdfium2.
-PPTX -> PDF first, with LibreOffice if installed, else Keynote on macOS (AppleScript), then as above.
+PPTX -> PDF first with LibreOffice (headless, like web apps do it), or Keynote on macOS as a fallback, then as above.
 
 Keynote is sandboxed and cannot open files under /tmp, so work happens in <repo>/.cache/slides.
 """
@@ -16,13 +16,25 @@ RENDER_ROOT = Path(__file__).resolve().parent.parent / ".cache" / "slides"
 WIDTH = 1600  # px of the rendered slide images
 
 
+def _find_soffice() -> Optional[str]:
+    for candidate in (shutil.which("soffice"), shutil.which("libreoffice"),
+                      "/Applications/LibreOffice.app/Contents/MacOS/soffice", "/usr/bin/soffice"):
+        if candidate and Path(candidate).exists():
+            return candidate
+    return None
+
+
 def _pptx_to_pdf(src: Path, out_dir: Path) -> Optional[Path]:
-    soffice = shutil.which("soffice") or shutil.which("libreoffice")
+    soffice = _find_soffice()
     if soffice:
-        subprocess.run([soffice, "--headless", "--convert-to", "pdf", "--outdir", str(out_dir), str(src)],
-                       check=False, timeout=180, capture_output=True)
+        # its own profile dir, so conversions never clash with each other or an open LibreOffice window
+        profile = (out_dir / "lo-profile").as_uri()
+        r = subprocess.run([soffice, f"-env:UserInstallation={profile}", "--headless", "--convert-to", "pdf",
+                            "--outdir", str(out_dir), str(src)], check=False, timeout=180, capture_output=True, text=True)
         pdf = out_dir / (src.stem + ".pdf")
-        return pdf if pdf.exists() else None
+        if pdf.exists():
+            return pdf
+        (out_dir / "libreoffice-error.txt").write_text(f"exit {r.returncode}\n{r.stdout}\n{r.stderr}")
 
     if Path("/Applications/Keynote.app").exists():
         pdf = out_dir / (src.stem + ".pdf")
