@@ -4,16 +4,17 @@ Run:   .venv/bin/uvicorn server:app --reload --port 8000
 Docs:  http://localhost:8000/docs
 """
 
+import threading
 from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from rehearsal import analysis, classroom, slides, voice
+from rehearsal import analysis, classroom, render, slides, voice
 from rehearsal.llm import MOCK, MODELS, AgentError
 from rehearsal.personas import BY_ID, PERSONAS
 from rehearsal.schemas import ChunkResult, LectureAnalysis, RehearsalReport
@@ -50,14 +51,36 @@ async def create_session(
     file: Optional[UploadFile] = File(None, description="PDF, PPTX or .txt"),
 ):
     """Create a rehearsal. Slides are optional: you can rehearse with speech only."""
-    deck = []
+    deck, upload = [], None
     if file is not None and file.filename:
-        deck = slides.load(file.filename, await file.read())
+        upload = (file.filename, await file.read())
+        deck = slides.load(*upload)
     elif slides_text:
         deck = slides.from_text(slides_text)
     session = classroom.Session(course, deck)
     classroom.SESSIONS[session.id] = session
+    if upload and upload[0].lower().endswith((".pdf", ".pptx")):
+        # rendering real slide images can take a while (Keynote/LibreOffice): do it in the background
+        session.render_status = "rendering"
+        threading.Thread(target=_render_slides, args=(session, *upload), daemon=True).start()
     return session.public()
+
+
+def _render_slides(session: classroom.Session, filename: str, data: bytes) -> None:
+    try:
+        session.images = render.render(filename, data)
+        session.render_status = "ready" if session.images else "failed"
+    except Exception:
+        session.render_status = "failed"
+
+
+@app.get("/api/sessions/{session_id}/slides/{index}.png")
+def slide_image(session_id: str, index: int):
+    """The real slide, rendered from the uploaded PDF or PPTX."""
+    session = _session(session_id)
+    if not (0 <= index < len(session.images)):
+        raise HTTPException(404, "No image for this slide (yet)")
+    return FileResponse(session.images[index], media_type="image/png")
 
 
 @app.get("/api/sessions/{session_id}")

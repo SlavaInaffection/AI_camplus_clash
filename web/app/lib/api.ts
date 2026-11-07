@@ -23,6 +23,7 @@ export const api = {
     else if (slidesText.trim()) fd.append("slides_text", slidesText);
     return call<Session>("/sessions", { method: "POST", body: fd });
   },
+  session: (id: string) => call<Session>(`/sessions/${id}`),
   analyze: (id: string) => call<Analysis>(`/sessions/${id}/analyze`, { method: "POST" }),
   chunk: (id: string, text: string, slideIndex: number | null) => call<ChunkResult>(`/sessions/${id}/chunk`, json({ text, slide_index: slideIndex })),
   report: (id: string) => call<Report>(`/sessions/${id}/report`, { method: "POST" }),

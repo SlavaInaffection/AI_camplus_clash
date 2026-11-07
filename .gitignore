@@ -5,3 +5,5 @@ logs/
 profiles/
 .DS_Store
 node_modules/
+.cache/
+.render_test/

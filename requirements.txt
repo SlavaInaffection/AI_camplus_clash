@@ -6,3 +6,4 @@ python-dotenv
 pydantic>=2
 pypdf
 python-pptx
+pypdfium2

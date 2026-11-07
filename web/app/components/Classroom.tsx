@@ -81,7 +81,6 @@ export default function Classroom() {
   const [alerts, setAlerts] = useState<Record<number, true>>({});
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [slideFile, setSlideFile] = useState<File | null>(null);
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
   const sessionRef = useRef<Session | null>(null);
   const slideRef = useRef<number | null>(null);
@@ -223,11 +222,8 @@ export default function Classroom() {
   async function start(file: File | null = slideFile, courseName: string = course): Promise<Session | null> {
     try {
       const s = await api.createSession(courseName, slidesText, file);
-      setPdfUrl((old) => {
-        if (old) URL.revokeObjectURL(old);
-        return file && file.name.toLowerCase().endsWith(".pdf") ? URL.createObjectURL(file) : null;
-      });
       setAnalysis(null);
+      if (s.render_status === "rendering") watchRender(s.id);
       sessionRef.current = s;
       slideRef.current = s.slides.length ? 0 : null;
       setSession(s);
@@ -252,6 +248,22 @@ export default function Classroom() {
   }
 
   /** The one big button: starts a session with the current setup if needed, then the mic. */
+  /** The backend renders real slide images in the background; pick them up when they are ready. */
+  function watchRender(id: string) {
+    const tick = async () => {
+      if (sessionRef.current?.id !== id) return; // a newer session replaced this one
+      try {
+        const fresh = await api.session(id);
+        setSession((cur) => (cur?.id === id ? { ...cur, render_status: fresh.render_status, slide_images: fresh.slide_images } : cur));
+        if (fresh.render_status === "rendering") setTimeout(tick, 1500);
+        else note(fresh.render_status === "ready" ? `Slides rendered (${fresh.slide_images})` : "Could not render the slides as images");
+      } catch {
+        setTimeout(tick, 3000);
+      }
+    };
+    setTimeout(tick, 1500);
+  }
+
   async function uploadSlides(file: File | undefined) {
     if (!file) return;
     setSlideFile(file);
@@ -364,8 +376,9 @@ export default function Classroom() {
           </div>
 
           <div className={styles.screen}>
-            {pdfUrl && slide ? (
-              <iframe key={slide.index} title={`Slide ${slide.index + 1}`} src={`${pdfUrl}#page=${slide.index + 1}&toolbar=0&navpanes=0&view=Fit`} />
+            {slide && session && (session.slide_images ?? 0) > slide.index ? (
+              // eslint-disable-next-line @next/next/no-img-element -- served by our own backend, already sized
+              <img className={styles.slideImg} src={`/api/sessions/${session.id}/slides/${slide.index}.png`} alt={`Slide ${slide.index + 1}: ${slide.title}`} />
             ) : slide ? (
               <div className={styles.slideCard}>
                 <h3>{slide.title}</h3>
@@ -378,6 +391,12 @@ export default function Classroom() {
             )}
           </div>
 
+          {session?.render_status === "rendering" && <p className={styles.rendering}>Rendering your slides…</p>}
+          {session?.render_status === "failed" && (
+            <p className={styles.rendering}>
+              Couldn&apos;t turn this file into slide images here, so you see its text. Export the deck as PDF and upload that to see the real slides.
+            </p>
+          )}
           {slide && splitSlide(slide.text).notes && (
             <details className={styles.notes}>
               <summary>Speaker notes</summary>

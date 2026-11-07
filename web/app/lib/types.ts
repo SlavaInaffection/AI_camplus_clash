@@ -53,6 +53,9 @@ export interface Session {
   course: string;
   slides: Slide[];
   students: StudentState[];
+  /** real slide images rendered from an uploaded PDF/PPTX */
+  render_status?: "none" | "rendering" | "ready" | "failed";
+  slide_images?: number;
 }
 
 export interface Report {

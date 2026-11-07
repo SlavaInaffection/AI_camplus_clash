@@ -35,12 +35,15 @@ class Session:
         self.analysis: Optional[LectureAnalysis] = None
         self.states: list[dict] = initial_states()
         self.chunks: list[dict] = []  # {"text", "slide_index", "result": ChunkResult}
+        self.images: list = []  # Path per slide, filled in the background for PDF/PPTX uploads
+        self.render_status = "none"  # none | rendering | ready | failed
 
     def public(self) -> dict:
         return {
             "id": self.id, "course": self.course, "slides": [s.model_dump() for s in self.slides],
             "analysis": self.analysis.model_dump() if self.analysis else None,
             "students": self.states, "chunks": len(self.chunks),
+            "render_status": self.render_status, "slide_images": len(self.images),
         }
 
 
