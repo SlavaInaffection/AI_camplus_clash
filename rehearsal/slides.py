@@ -29,10 +29,13 @@ def from_pptx(data: bytes) -> list[Slide]:
     slides = []
     for i, s in enumerate(prs.slides):
         parts = [sh.text_frame.text for sh in s.shapes if sh.has_text_frame and sh.text_frame.text.strip()]
+        on_slide = "\n".join(parts).strip()
+        title = _title(on_slide, i)  # from what is on the slide, never from the notes
+        if not on_slide:
+            parts.append(title)  # keep "title on the first line" true for the frontend
         if s.has_notes_slide and s.notes_slide.notes_text_frame.text.strip():
             parts.append("Speaker notes: " + s.notes_slide.notes_text_frame.text)
-        text = "\n".join(parts).strip()
-        slides.append(Slide(index=i, title=_title(text, i), text=text))
+        slides.append(Slide(index=i, title=title, text="\n".join(parts).strip()))
     return slides
 
 

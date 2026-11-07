@@ -27,6 +27,19 @@ const DEMO_QUESTIONS = [
   "Why is that true, though?",
 ];
 
+/** "Bell_pitch-deck_v3.pptx" -> "Bell pitch deck v3" */
+const deckName = (filename: string) => filename.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim() || "My presentation";
+
+/** Slide text from the backend: first line is the title, then the body, then optional "Speaker notes: ...". */
+function splitSlide(text: string) {
+  const i = text.indexOf("Speaker notes:");
+  const main = i >= 0 ? text.slice(0, i) : text;
+  return {
+    body: main.split("\n").slice(1).join("\n").trim(),
+    notes: i >= 0 ? text.slice(i + "Speaker notes:".length).trim() : "",
+  };
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 type Speaking = { id: number; says: string; action: string } | null;
@@ -41,6 +54,7 @@ export default function Classroom() {
   const [speaking, setSpeaking] = useState<Speaking>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [course, setCourse] = useState("Intro to Statistics, first year");
+  const [courseTouched, setCourseTouched] = useState(false);
   const [slidesText, setSlidesText] = useState(DEFAULT_SLIDES);
   const [slideIndex, setSlideIndex] = useState<number | null>(null);
   const [stats, setStats] = useState<{ attention: number; confusion: number; summary: string } | null>(null);
@@ -177,9 +191,9 @@ export default function Classroom() {
     }
   }
 
-  async function start(file: File | null = slideFile): Promise<Session | null> {
+  async function start(file: File | null = slideFile, courseName: string = course): Promise<Session | null> {
     try {
-      const s = await api.createSession(course, slidesText, file);
+      const s = await api.createSession(courseName, slidesText, file);
       setPdfUrl((old) => {
         if (old) URL.revokeObjectURL(old);
         return file && file.name.toLowerCase().endsWith(".pdf") ? URL.createObjectURL(file) : null;
@@ -213,7 +227,10 @@ export default function Classroom() {
     if (!file) return;
     setSlideFile(file);
     if (recordingRef.current) await toggleMic();
-    await start(file);
+    // name the session after the deck unless a course name was typed in Setup
+    const name = courseTouched ? course : deckName(file.name);
+    setCourse(name);
+    await start(file, name);
   }
 
   function goToSlide(delta: number) {
@@ -279,7 +296,7 @@ export default function Classroom() {
       <header className={styles.top}>
         <div className={styles.brand}>
           <p className={styles.eyebrow}>Rehearsal Room</p>
-          <h1 className={styles.title}>{session ? session.course : "A flight simulator for teaching"}</h1>
+          <h1 className={styles.title}>{session ? session.course : course || "A flight simulator for teaching"}</h1>
         </div>
 
         <button className={recording ? styles.talkOn : styles.talk} onClick={startTalking} aria-pressed={recording}
@@ -324,7 +341,7 @@ export default function Classroom() {
             ) : slide ? (
               <div className={styles.slideCard}>
                 <h3>{slide.title}</h3>
-                <p>{slide.text.split("\n").slice(1).join("\n")}</p>
+                {splitSlide(slide.text).body && <p>{splitSlide(slide.text).body}</p>}
               </div>
             ) : (
               <div className={styles.slideEmpty}>
@@ -332,6 +349,13 @@ export default function Classroom() {
               </div>
             )}
           </div>
+
+          {slide && splitSlide(slide.text).notes && (
+            <details className={styles.notes}>
+              <summary>Speaker notes</summary>
+              <p>{splitSlide(slide.text).notes}</p>
+            </details>
+          )}
 
           <label className={styles.upload}>
             <input type="file" accept=".pdf,.pptx,.txt" onChange={(e) => uploadSlides(e.target.files?.[0])} />
@@ -408,7 +432,7 @@ export default function Classroom() {
             <h2>Setup</h2>
             <label className={styles.field}>
               <span>Course</span>
-              <input value={course} onChange={(e) => setCourse(e.target.value)} />
+              <input value={course} onChange={(e) => { setCourse(e.target.value); setCourseTouched(true); }} />
             </label>
             <label className={styles.field}>
               <span>Slides (separate with a line ---)</span>

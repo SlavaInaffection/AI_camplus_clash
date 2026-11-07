@@ -25,14 +25,14 @@
 .top {
   flex: none;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 12px 24px;
   padding: 12px 24px;
   background: #fbf9ff;
   border-bottom: 1px solid var(--line);
 }
-.brand { min-width: 0; }
+.brand { flex: 1 1 160px; min-width: 0; }
 .eyebrow { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
 .title { margin: 2px 0 0; font-family: var(--font-grotesk), sans-serif; font-size: 22px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
@@ -58,7 +58,7 @@
 @keyframes pulse { 50% { box-shadow: 0 0 0 8px rgba(162, 28, 175, .18); } }
 @keyframes blinkDot { to { visibility: hidden; } }
 
-.meters { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; }
+.meters { flex: none; display: flex; align-items: center; gap: 14px; }
 .meter { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
 .meter b { color: var(--ink); width: 28px; font-variant-numeric: tabular-nums; }
 .meterTrack { width: 110px; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
@@ -67,9 +67,9 @@
 .pink { background: var(--pink); }
 .pending { font-size: 13px; color: var(--muted); }
 
-.tools { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tools { flex: none; margin-left: auto; display: flex; align-items: center; gap: 6px; }
 .tools button, .tools select, .dialog button {
-  font: inherit; font-size: 14px; font-weight: 600; min-height: 44px; padding: 0 14px;
+  font: inherit; font-size: 14px; font-weight: 600; min-height: 44px; padding: 0 12px;
   border-radius: 10px; border: 1px solid #c7b8f5; background: #fff; color: var(--ink); cursor: pointer;
 }
 .tools button:hover, .dialog button:hover { background: #f1ebff; }
@@ -86,7 +86,7 @@
   min-height: 0;
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(300px, 30%, 440px);
+  grid-template-columns: minmax(0, 1fr) clamp(260px, 30%, 440px);
   grid-template-rows: minmax(0, 1fr);
   gap: 16px;
   padding: 16px 20px 72px;
@@ -122,7 +122,7 @@
 .row { display: flex; justify-content: center; gap: calc(min(32px, 2.4cqi) * var(--scale)); }
 .seat {
   /* as big as the room allows: limited by width (5 per row) and by height (3 rows + board) */
-  --w: min(220px, 17.5cqi, calc((100cqh - 190px) / 2.25));
+  --w: min(210px, 15.5cqi, calc((100cqh - 150px) / 2.85));
   position: relative;
   width: calc(var(--w) * var(--scale));
   display: flex;
@@ -238,9 +238,14 @@
 
 .srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-@media (max-width: 900px) {
-  .tools { margin-left: 0; }
+@media (max-width: 1280px) {
+  .meterTrack { width: 64px; }
   .title { font-size: 18px; }
+  .talk, .talkOn { min-height: 46px; padding: 0 18px; font-size: 16px; }
+}
+@media (max-width: 1050px) {
+  .top { flex-wrap: wrap; }
+  .meter span:first-child { display: none; }
 }
 
 /* --- presentation, top-right corner --- */
@@ -277,8 +282,8 @@
 }
 .screen iframe { width: 100%; height: 100%; border: 0; background: #fff; }
 .slideCard { height: 100%; box-sizing: border-box; padding: 16px 20px; color: #f3eeff; overflow: auto; }
-.slideCard h3 { margin: 0 0 8px; font-family: var(--font-grotesk), sans-serif; font-size: 20px; }
-.slideCard p { margin: 0; font-size: 14px; line-height: 1.45; white-space: pre-line; opacity: .9; }
+.slideCard h3 { margin: 0 0 8px; font-family: var(--font-grotesk), sans-serif; font-size: clamp(16px, 1.5vw, 22px); line-height: 1.2; }
+.slideCard p { margin: 0; font-size: 13px; line-height: 1.45; white-space: pre-line; opacity: .9; }
 .slideEmpty { height: 100%; display: grid; place-items: center; padding: 16px; text-align: center; color: #e3dafc; font-size: 14px; }
 .slideEmpty p { margin: 0; }
 .upload {
@@ -306,9 +311,13 @@
 .heard { margin: 0; font-size: 13px; line-height: 1.4; color: var(--muted); }
 .heard b { color: var(--ink); }
 
-@media (max-width: 1000px) {
+@media (max-width: 760px) {
   .room { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
   .deck { grid-column: 1; grid-row: 1; flex-direction: row; flex-wrap: wrap; }
   .rows { grid-row: 2; }
   .screen { width: 220px; }
 }
+
+.notes { font-size: 13px; color: var(--muted); }
+.notes summary { cursor: pointer; font-weight: 700; color: var(--ink); min-height: 28px; }
+.notes p { margin: 6px 0 0; max-height: 9em; overflow: auto; line-height: 1.45; white-space: pre-line; }
