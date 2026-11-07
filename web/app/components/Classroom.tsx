@@ -12,7 +12,7 @@ import styles from "./Classroom.module.css";
 
 const ROWS = [2, 1]; // back row first (top of the screen), front row nearest the lectern
 const ROW_SCALE: Record<number, number> = { 2: 0.9, 1: 1 };
-const CHUNK_SECONDS = 10;
+const CHUNK_SECONDS = 4; // short chunks keep reactions close to live speech
 
 const DEFAULT_SLIDES = `Hypothesis testing
 H0, H1, alpha, beta, type I error, type II error, power = 1 - beta, p-value
@@ -36,14 +36,48 @@ const deckName = (filename: string) => filename.replace(/\.[^.]+$/, "").replace(
 /** Slide text from the backend: first line is the title, then the body, then optional "Speaker notes: ...". */
 function splitSlide(text: string) {
   const i = text.indexOf("Speaker notes:");
-  const main = i >= 0 ? text.slice(0, i) : text;
+  const main = (i >= 0 ? text.slice(0, i) : text).trim();
+  const lines = main.split("\n").map((l) => l.trimEnd());
+  const bodyLines = lines.slice(1).filter((l, idx, arr) => l.trim() !== "" || (idx > 0 && arr[idx - 1].trim() !== ""));
   return {
-    body: main.split("\n").slice(1).join("\n").trim(),
+    bodyLines,
     notes: i >= 0 ? text.slice(i + "Speaker notes:".length).trim() : "",
   };
 }
 
-const ALERT_MS = 5500; // how long the "!" shows before a student asks
+function SlideBody({ text }: { text: string }) {
+  const { bodyLines } = splitSlide(text);
+  if (!bodyLines.length) return null;
+  const blocks: { type: "p" | "ul"; items: string[] }[] = [];
+  for (const raw of bodyLines) {
+    const line = raw.trim();
+    if (!line) {
+      if (blocks.length && blocks[blocks.length - 1].type === "p") continue;
+      continue;
+    }
+    const bullet = line.match(/^•\s+(.*)$/) || line.match(/^\s{2,}•\s+(.*)$/);
+    if (bullet) {
+      const last = blocks[blocks.length - 1];
+      if (last?.type === "ul") last.items.push(bullet[1]);
+      else blocks.push({ type: "ul", items: [bullet[1]] });
+    } else {
+      blocks.push({ type: "p", items: [line] });
+    }
+  }
+  return (
+    <div className={styles.slideBody}>
+      {blocks.map((b, i) =>
+        b.type === "ul" ? (
+          <ul key={i}>{b.items.map((item, j) => <li key={j}>{item}</li>)}</ul>
+        ) : (
+          <p key={i}>{b.items[0]}</p>
+        ),
+      )}
+    </div>
+  );
+}
+
+const ALERT_MS = 1600; // brief "!" so the question still feels incoming without killing flow
 
 /** Fade a looping sound out instead of cutting it. */
 async function fadeOut(a: HTMLAudioElement, ms = 350) {
@@ -89,7 +123,6 @@ export default function Classroom() {
   const slideRef = useRef<number | null>(null);
   const recordingRef = useRef(false);
   const streamRef = useRef<MediaStream | null>(null);
-  const chunkQueue = useRef<Promise<void>>(Promise.resolve());
   const speechQueue = useRef<Promise<void>>(Promise.resolve());
   const recordChunkRef = useRef<() => void>(() => {});
   useEffect(() => { sessionRef.current = session; }, [session]);
@@ -116,7 +149,7 @@ export default function Classroom() {
       setAlerts((a) => { const n = { ...a }; delete n[sp.id]; return n; });
       const raises = sp.action !== "whisper_to_neighbour";
       if (raises) setStudents((s) => ({ ...s, [sp.id]: { ...s[sp.id], state: "hand_raised" } }));
-      await sleep(raises ? 700 : 200);
+      await sleep(raises ? 280 : 120);
       setSpeaking(sp);
       const started = performance.now();
       const sfx = new Audio("/sounds/speak.mp3");
@@ -134,11 +167,11 @@ export default function Classroom() {
             const u = new SpeechSynthesisUtterance(sp.says);
             u.onend = () => done(); u.onerror = () => done();
             speechSynthesis.speak(u);
-          } else setTimeout(done, 3000);
+          } else setTimeout(done, 2000);
         });
       } finally {
         await fadeOut(sfx);
-        await sleep(Math.max(0, 2500 - (performance.now() - started)));
+        await sleep(Math.max(0, 900 - (performance.now() - started)));
         setSpeaking(null);
         // after asking, the hand comes down
         setStudents((s) => s[sp.id]?.state === "hand_raised" ? { ...s, [sp.id]: { ...s[sp.id], state: "listening" } } : s);
@@ -163,12 +196,20 @@ export default function Classroom() {
     }
   }, [nameOf, note, say]);
 
-  const sendChunk = useCallback((text: string) => {
-    const s = sessionRef.current;
-    if (!s) return;
-    setPending((n) => n + 1);
-    const slide = slideRef.current;
-    chunkQueue.current = chunkQueue.current.then(async () => {
+  // Keep near-live: if the Director is still busy, keep only the newest transcript.
+  const pendingChunk = useRef<string | null>(null);
+  const chunkInFlight = useRef(false);
+
+  const drainChunks = useCallback(async () => {
+    if (chunkInFlight.current) return;
+    chunkInFlight.current = true;
+    while (pendingChunk.current) {
+      const text = pendingChunk.current;
+      pendingChunk.current = null;
+      const s = sessionRef.current;
+      if (!s) break;
+      setPending((n) => n + 1);
+      const slide = slideRef.current;
       try {
         const t = performance.now();
         const r = await api.chunk(s.id, text, slide);
@@ -179,8 +220,16 @@ export default function Classroom() {
       } finally {
         setPending((n) => n - 1);
       }
-    });
+    }
+    chunkInFlight.current = false;
+    if (pendingChunk.current) void drainChunks();
   }, [apply, note]);
+
+  const sendChunk = useCallback((text: string) => {
+    if (!sessionRef.current) return;
+    pendingChunk.current = text;
+    void drainChunks();
+  }, [drainChunks]);
 
   // --- microphone: a fresh MediaRecorder per chunk so each blob is a complete file ---
   const recordChunk = useCallback(() => {
@@ -196,7 +245,7 @@ export default function Classroom() {
       try {
         const { text } = await api.transcribe(blob, s.id, slideRef.current);
         note(`🎤 ${text || "(silence)"}`);
-        if (text && text.split(/\s+/).length >= 3) sendChunk(text);
+        if (text && text.split(/\s+/).filter(Boolean).length >= 2) sendChunk(text);
       } catch (e) {
         note(`⚠️ ${(e as Error).message}`);
       }
@@ -385,7 +434,7 @@ export default function Classroom() {
             ) : slide ? (
               <div className={styles.slideCard}>
                 <h3>{slide.title}</h3>
-                {splitSlide(slide.text).body && <p>{splitSlide(slide.text).body}</p>}
+                <SlideBody text={slide.text} />
               </div>
             ) : (
               <div className={styles.slideEmpty}>

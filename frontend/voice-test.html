@@ -23,7 +23,7 @@
 </head>
 <body>
 <h1>🎭 Rehearsal Room · voice test</h1>
-<div class="muted">Mic → /transcribe → /chunk → students react → /speak. Test page for the voice loop; the 3D classroom replaces the grid.</div>
+  <div class="muted">Mic → /transcribe → /chunk → students react → /speak. Short chunks + drop stale backlog so the class stays near live speech.</div>
 
 <fieldset>
   <legend>1 · Session</legend>
@@ -45,7 +45,7 @@ Example: is this coin fair?
   <legend>2 · Teach</legend>
   Slide: <select id="slide"><option value="">(none)</option></select>
   Language: <select id="lang"><option value="">auto</option><option value="en">en</option><option value="it">it</option></select>
-  Chunk: <select id="secs"><option>8</option><option selected>10</option><option>15</option></select> s
+  Chunk: <select id="secs"><option selected>4</option><option>5</option><option>8</option></select> s
   <button class="rec" id="rec" disabled>🎤 Start talking</button>
   <div style="margin-top:8px">
     <input id="typed" size="70" placeholder="…or type what you would say and press Enter">
@@ -107,21 +107,38 @@ function say(speaker) {
   });
 }
 
-// ---------- chunks: sent in order, without blocking recording ----------
-let chunkQueue = Promise.resolve();
+// ---------- chunks: keep near-live — if behind, keep only the newest text ----------
+let chunkInFlight = false;
+let pendingChunk = null;   // latest waiting text (older backlog is dropped)
+let droppedChunks = 0;
+
 function sendChunk(text) {
-  const slide = $("slide").value === "" ? null : Number($("slide").value);
-  chunkQueue = chunkQueue.then(async () => {
+  if (pendingChunk) droppedChunks++;
+  pendingChunk = text;
+  drainChunks();
+}
+
+async function drainChunks() {
+  if (chunkInFlight || !pendingChunk || !session) return;
+  chunkInFlight = true;
+  while (pendingChunk) {
+    const text = pendingChunk;
+    pendingChunk = null;
+    const slide = $("slide").value === "" ? null : Number($("slide").value);
     const t = performance.now();
     try {
       const d = await (await api(`/sessions/${session.id}/chunk`, { method: "POST",
         headers: { "content-type": "application/json" }, body: JSON.stringify({ text, slide_index: slide }) })).json();
       renderClass(d.students);
-      $("stats").textContent = `attention ${d.class_attention} · confusion ${d.class_confusion} · chunk ${d.chunk_index}`;
+      const lag = droppedChunks ? ` · skipped ${droppedChunks}` : "";
+      droppedChunks = 0;
+      $("stats").textContent = `attention ${d.class_attention} · confusion ${d.class_confusion} · chunk ${d.chunk_index}${lag}`;
       log(`chunk ${d.chunk_index} (${((performance.now() - t) / 1000).toFixed(1)}s): ${d.summary}`);
       d.speakers.forEach(sp => { log(`🗣 ${personas.find(p => p.id === sp.id).name} (${sp.action}): ${sp.says}`); say(sp); });
     } catch (e) { log("chunk error " + e.message); }
-  });
+  }
+  chunkInFlight = false;
+  if (pendingChunk) drainChunks();
 }
 
 // ---------- mic: a fresh MediaRecorder per chunk so every blob is a complete file ----------
@@ -142,7 +159,7 @@ function recordOneChunk() {
     try {
       const { text } = await (await api("/transcribe", { method: "POST", body: fd })).json();
       log("🎤 " + (text || "(silence)"));
-      if (text && text.split(/\s+/).length >= 3) sendChunk(text);
+      if (text && text.split(/\s+/).filter(Boolean).length >= 2) sendChunk(text);
     } catch (e) { log("transcribe error " + e.message); }
   };
   rec.start();

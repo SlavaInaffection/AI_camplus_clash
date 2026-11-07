@@ -69,11 +69,14 @@ class SpeakerPick(BaseModel):
     id: int
     action: Literal["raise_hand", "interrupt", "whisper_to_neighbour"]
     intent: str = Field(description="What this student wants to say or ask, in a few words")
+    says: str = Field(
+        description="Exactly what they say out loud: one short natural sentence in the lecture language"
+    )
 
 
 class DirectorTurn(BaseModel):
     students: list[StudentState] = Field(description="Updated state for EVERY student in the class")
-    speakers: list[SpeakerPick] = Field(description="0-2 students who speak up now. Often empty.")
+    speakers: list[SpeakerPick] = Field(description="0-1 students who speak up now. Usually empty.")
     chunk_summary: str = Field(description="One line: what the lecturer just explained")
 
 

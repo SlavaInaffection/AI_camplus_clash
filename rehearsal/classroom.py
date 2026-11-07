@@ -7,6 +7,8 @@ After:
   lost moments (computed) -> 3 Fix agents in parallel -> Fix Evaluator -> Coach summary
 """
 
+import os
+import re
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
@@ -21,6 +23,17 @@ from .schemas import (
 
 RECENT_CHUNKS = 3
 LOST_STATES = {"lost", "sleeping", "on_phone"}
+# Live classroom: mostly silent reactions. Chunks are ~4s, so cooldowns are in chunk counts.
+MIN_CHUNKS_BETWEEN_SPEAKERS = 6   # ~24s between any questions
+MIN_CHUNKS_SAME_STUDENT = 12      # ~48s before the same student speaks again
+# Riccardo (id 14) is the "confident asker" — hard-cap him harder than the prompt alone.
+RICCARDO_ID = 14
+MIN_CHUNKS_RICCARDO = 18          # ~72s — stops him monopolizing Q&A
+INVITE_RE = re.compile(
+    r"\b(any questions|questions\??|ask(?:\s+me)?|speak up|raise (?:your )?hand|"
+    r"does that make sense|is that clear|before we move on)\b",
+    re.I,
+)
 
 
 def is_lost(s: dict) -> bool:
@@ -37,6 +50,8 @@ class Session:
         self.chunks: list[dict] = []  # {"text", "slide_index", "result": ChunkResult}
         self.images: list = []  # Path per slide, filled in the background for PDF/PPTX uploads
         self.render_status = "none"  # none | rendering | ready | failed
+        self.last_speaker_chunk: Optional[int] = None
+        self.last_spoke_at: dict[int, int] = {}  # student_id -> chunk_index
 
     def public(self) -> dict:
         return {
@@ -53,19 +68,37 @@ SESSIONS: dict[str, Session] = {}
 # --- Director ---------------------------------------------------------------
 
 DIRECTOR_SYSTEM = """You are the Director of a simulated university classroom used by lecturers to rehearse.
-You receive the class roster (15 students defined by their situation), their current state, the slide being
-shown, learning-science issues predicted for that slide, and the latest chunk of what the lecturer SAID.
+You receive a compact class roster, current states, optional slide context, and a short transcript chunk.
+
+Most chunks have ZERO speakers. A real lecture is mostly silent faces changing — not a Q&A show.
+Show reactions through attention/confusion/state/bubble. Do not pack the room with questions.
 
 Update EVERY student realistically:
-- Changes are gradual (usually within +/-25 per chunk) unless something clearly helps or hurts.
-- Base every change on the student's situation AND a learning-science principle (cognitive load, missing
-  prerequisite, no example, pace, split attention, motivation, accessibility). Put that in "reason", short.
-- Good teaching moves (a concrete example, a recap, a question to the class, a visual, defining a term)
-  should visibly bring students back. Reward them.
-- Pick 0-2 speakers, only when a real student in that state would speak. Shy students whisper instead of
-  raising a hand. About one speaker every two or three chunks is realistic; do not make it constant.
+- Changes are gradual (usually within +/-20 per chunk) unless something clearly helps or hurts.
+- Base every change on the student's situation AND a learning-science principle. "reason" = max 12 words.
+- Good teaching moves (example, recap, question, visual, defining a term) should bring students back.
+- Speakers: default to []. At most ONE.
+  Speak ONLY when: (a) the lecturer clearly invites questions / pauses for the class, OR
+  (b) a student is badly stuck (confusion high / lost) on something just said and would realistically break silence.
+  Never invent a question for "energy". Never a multi-part interrogation.
+- Do NOT default to Riccardo. Prefer variety (Mateo, Amira, Paolo, Elena, Fatima, Chen whispering, etc.).
+- If someone speaks, "says" = one short natural sentence in the lecture language.
 - bubble is one emoji that matches the state.
 Do not invent what the lecturer said; react only to the transcript."""
+
+
+def _roster_compact() -> list[dict]:
+    """Omit voice metadata from the live loop — tokens without payoff for the Director."""
+    return [
+        {
+            "id": p["id"],
+            "name": p["name"],
+            "situation": p["situation"],
+            "knowledge": p["knowledge"],
+            "loses_focus_when": p["loses_focus_when"],
+        }
+        for p in PERSONAS
+    ]
 
 
 def _slide(session: Session, slide_index: Optional[int]) -> Optional[dict]:
@@ -73,18 +106,23 @@ def _slide(session: Session, slide_index: Optional[int]) -> Optional[dict]:
         return None
     slide = session.slides[slide_index].model_dump()
     if session.analysis:
-        slide["predicted_issues"] = [i.model_dump() for i in session.analysis.issues if i.slide_index == slide_index]
+        # Keep only the hottest predicted issues for this slide (token budget).
+        issues = [i.model_dump() for i in session.analysis.issues if i.slide_index == slide_index]
+        issues.sort(key=lambda i: -i.get("severity", 0))
+        slide["predicted_issues"] = issues[:2]
     return slide
 
 
 def direct(session: Session, text: str, slide_index: Optional[int]) -> DirectorTurn:
     payload = {
         "course": session.course,
-        "roster": PERSONAS,
-        "current_states": session.states,
+        "roster": _roster_compact(),
+        "current_states": [
+            {k: s[k] for k in ("id", "attention", "confusion", "state", "bubble")} for s in session.states
+        ],
         "slide": _slide(session, slide_index),
-        "recent_transcript": [c["text"] for c in session.chunks[-RECENT_CHUNKS:]],
-        "new_chunk": text,
+        "recent_transcript": [c["text"][:280] for c in session.chunks[-RECENT_CHUNKS:]],
+        "new_chunk": text[:500],
         "chunk_index": len(session.chunks),
     }
     turn = ask("Director", "director", DIRECTOR_SYSTEM, payload, DirectorTurn,
@@ -97,15 +135,39 @@ def direct(session: Session, text: str, slide_index: Optional[int]) -> DirectorT
         if new:
             new.attention = max(0, min(100, new.attention))
             new.confusion = max(0, min(100, new.confusion))
+            if len(new.reason) > 80:
+                new.reason = new.reason[:77] + "…"
             merged.append(new)
         else:
             merged.append(StudentState(**old))
     turn.students = merged
-    turn.speakers = [sp for sp in turn.speakers if sp.id in BY_ID][:2]
+    turn.speakers = _filter_speakers(
+        session, [sp for sp in turn.speakers if sp.id in BY_ID][:1], text
+    )
     return turn
 
 
-# --- Student agents ---------------------------------------------------------
+def _filter_speakers(session: Session, speakers: list, transcript: str) -> list:
+    """Hard rate-limits so the classroom does not turn into constant Q&A."""
+    if not speakers:
+        return []
+    chunk_i = len(session.chunks)
+    invited = bool(INVITE_RE.search(transcript))
+    # Normal silence window; if the lecturer invites questions, only need a short gap.
+    min_gap = 2 if invited else MIN_CHUNKS_BETWEEN_SPEAKERS
+    if session.last_speaker_chunk is not None and chunk_i - session.last_speaker_chunk < min_gap:
+        return []
+    kept = []
+    for sp in speakers:
+        last = session.last_spoke_at.get(sp.id)
+        cooldown = MIN_CHUNKS_RICCARDO if sp.id == RICCARDO_ID else MIN_CHUNKS_SAME_STUDENT
+        if last is not None and chunk_i - last < cooldown:
+            continue
+        kept.append(sp)
+    return kept[:1]
+
+
+# --- Student agents (optional; live loop uses Director.says to stay fast) ---
 
 def _student_system(persona: dict) -> str:
     return f"""You are {persona['name']}, a university student in a lecture.
@@ -117,6 +179,20 @@ Speak in the same language the lecturer is using, at your own language level. Be
 
 
 def speak(session: Session, turn: DirectorTurn, text: str, slide_index: Optional[int]) -> list[Speaker]:
+    """Optional second pass for richer dialogue. Off by default in the live path."""
+    if os.environ.get("LIVE_STUDENT_AGENTS", "0") != "1":
+        states = {s.id: s for s in turn.students}
+        return [
+            Speaker(
+                id=sp.id,
+                action=sp.action,
+                says=(sp.says or sp.intent).strip(),
+                why=states[sp.id].reason,
+            )
+            for sp in turn.speakers
+            if (sp.says or sp.intent).strip()
+        ]
+
     states = {s.id: s for s in turn.students}
 
     def one(pick) -> Speaker:
@@ -153,6 +229,10 @@ def process_chunk(session: Session, text: str, slide_index: Optional[int]) -> Ch
     )
     session.states = states
     session.chunks.append({"text": text, "slide_index": slide_index, "result": result})
+    if speakers:
+        session.last_speaker_chunk = result.chunk_index
+        for sp in speakers:
+            session.last_spoke_at[sp.id] = result.chunk_index
     return result
 
 

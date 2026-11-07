@@ -46,8 +46,8 @@ ALL_PERSONAS = [
     {"id": 13, "voice": "coral", "voice_style": "Calm, articulate woman, polite but firm when she cannot see something.", "name": "Nadia", "emoji": "♿", "seat": [2, 3],
      "situation": "Low vision, sits at the back because of the accessible desk. Cannot read small fonts or low-contrast slides.",
      "knowledge": "Good prerequisites", "loses_focus_when": "Lecturer says 'as you can see here' about small visual details"},
-    {"id": 14, "voice": "ash", "voice_style": "Confident, outgoing young man, loud and direct, likes to interrupt.", "name": "Riccardo", "emoji": "🙋", "seat": [2, 4],
-     "situation": "Confident, asks lots of questions, sometimes jumps ahead. Good at exposing gaps the lecturer skipped.",
+    {"id": 14, "voice": "ash", "voice_style": "Confident, outgoing young man, direct but not constantly interrupting.", "name": "Riccardo", "emoji": "🙋", "seat": [2, 4],
+     "situation": "Confident and engaged. Occasionally spots a gap the lecturer skipped — but he does NOT fire questions every few minutes; most of the time he just listens and nods.",
      "knowledge": "Average prerequisites", "loses_focus_when": "Hand-waving or 'it is obvious that...'"},
 ]
 

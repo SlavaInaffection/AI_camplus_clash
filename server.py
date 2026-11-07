@@ -166,6 +166,8 @@ def reset(session_id: str):
     session = _session(session_id)
     session.states = classroom.initial_states()
     session.chunks = []
+    session.last_speaker_chunk = None
+    session.last_spoke_at = {}
     return session.public()
 
 

@@ -58,7 +58,10 @@ def director(states: list[dict], chunk_index: int) -> DirectorTurn:
         who = rng.choice(confused)
         who.state, who.bubble = "hand_raised", BUBBLES["hand_raised"]
         action = "whisper_to_neighbour" if who.id == 6 else "raise_hand"
-        speakers.append(SpeakerPick(id=who.id, action=action, intent="ask to clarify the last point"))
+        speakers.append(SpeakerPick(
+            id=who.id, action=action, intent="ask to clarify the last point",
+            says="Sorry — could you say that last bit again with an example?",
+        ))
     return DirectorTurn(students=out, speakers=speakers, chunk_summary=f"[mock] chunk {chunk_index}")
 
 
