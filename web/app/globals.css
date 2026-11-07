@@ -11,7 +11,7 @@ body {
   margin: 0;
   max-width: 100vw;
   overflow-x: hidden;
-  background: #fbfaf7;
+  background: #f7f4ff;
 }
 
 @media (prefers-reduced-motion: reduce) {

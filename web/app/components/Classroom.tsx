@@ -245,7 +245,7 @@ export default function Classroom() {
         </div>
         <div className={styles.meters} aria-live="polite">
           <Meter label="Attention" value={stats?.attention ?? 80} tone="blue" />
-          <Meter label="Confusion" value={stats?.confusion ?? 10} tone="orange" />
+          <Meter label="Confusion" value={stats?.confusion ?? 10} tone="pink" />
           <span className={`${styles.badge} ${styles[backend]}`}>
             {backend === "live" ? "Live AI" : backend === "mock" ? "Mock mode" : backend === "offline" ? "Backend offline" : "…"}
           </span>
@@ -363,7 +363,7 @@ export default function Classroom() {
   );
 }
 
-function Meter({ label, value, tone }: { label: string; value: number; tone: "blue" | "orange" }) {
+function Meter({ label, value, tone }: { label: string; value: number; tone: "blue" | "pink" }) {
   return (
     <div className={styles.meter}>
       <span>{label}</span>
