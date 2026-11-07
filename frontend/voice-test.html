@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rehearsal Room · voice test</title>
+<style>
+  :root { color-scheme: light; }
+  body { font-family: system-ui, sans-serif; max-width: 1000px; margin: 24px auto; padding: 0 16px; color: #1a1a1a; background: #fff; }
+  h1 { margin-bottom: 4px; } .muted { color: #666; font-size: 14px; }
+  fieldset { border: 1px solid #ddd; border-radius: 10px; margin: 14px 0; padding: 12px 16px; }
+  textarea, input, select { font: inherit; padding: 6px; } textarea { width: 100%; }
+  button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 1px solid #888; background: #fff; cursor: pointer; }
+  button.primary { background: #1f6feb; color: #fff; border-color: #1f6feb; }
+  button.rec { background: #d1242f; color: #fff; border-color: #d1242f; }
+  #class { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .s { border: 1px solid #ddd; border-radius: 10px; padding: 8px; text-align: center; transition: background .4s; }
+  .s .b { font-size: 30px; } .s .n { font-weight: 600; } .s .st { font-size: 12px; color: #555; }
+  .bar { height: 6px; background: #eee; border-radius: 3px; margin-top: 4px; } .bar i { display: block; height: 100%; border-radius: 3px; }
+  .speaking { outline: 3px solid #f2b705; }
+  #log { font-size: 13px; background: #f6f8fa; border-radius: 8px; padding: 8px; height: 220px; overflow: auto; white-space: pre-wrap; }
+  #stats { font-size: 18px; margin: 8px 0; }
+</style>
+</head>
+<body>
+<h1>🎭 Rehearsal Room · voice test</h1>
+<div class="muted">Mic → /transcribe → /chunk → students react → /speak. Test page for the voice loop; the 3D classroom replaces the grid.</div>
+
+<fieldset>
+  <legend>1 · Session</legend>
+  <input id="course" value="Intro to Statistics, first year" size="40">
+  <textarea id="slides" rows="4" placeholder="Optional slides, separated by a line with ---">Hypothesis testing
+H0, H1, alpha, beta, type I error, type II error, power = 1 - beta, p-value
+---
+The p-value
+P(T >= t_obs | H0). Reject H0 if p < alpha.
+---
+Example: is this coin fair?
+100 flips, 62 heads.</textarea>
+  <button class="primary" id="create">Create session</button>
+  <button id="analyze" disabled>Analyze slides</button>
+  <span id="sid" class="muted"></span>
+</fieldset>
+
+<fieldset>
+  <legend>2 · Teach</legend>
+  Slide: <select id="slide"><option value="">(none)</option></select>
+  Language: <select id="lang"><option value="">auto</option><option value="en">en</option><option value="it">it</option></select>
+  Chunk: <select id="secs"><option>8</option><option selected>10</option><option>15</option></select> s
+  <button class="rec" id="rec" disabled>🎤 Start talking</button>
+  <div style="margin-top:8px">
+    <input id="typed" size="70" placeholder="…or type what you would say and press Enter">
+  </div>
+  <div id="stats"></div>
+  <div id="class"></div>
+</fieldset>
+
+<fieldset>
+  <legend>3 · After</legend>
+  <button id="report" disabled>Get report</button>
+  <button id="reset" disabled>Reset class</button>
+  <div id="reportOut"></div>
+</fieldset>
+
+<div id="log"></div>
+
+<script>
+const API = "/api";
+const $ = (id) => document.getElementById(id);
+let session = null, personas = [], recording = false, stream = null;
+const log = (m) => { $("log").textContent = `${new Date().toLocaleTimeString()}  ${m}\n` + $("log").textContent; };
+
+async function api(path, opts = {}) {
+  const r = await fetch(API + path, opts);
+  if (!r.ok) throw new Error(`${path}: ${r.status} ${await r.text()}`);
+  return r;
+}
+
+// ---------- class grid (replace with the 3D classroom) ----------
+function renderClass(students = []) {
+  const byId = Object.fromEntries(students.map(s => [s.id, s]));
+  $("class").innerHTML = [...personas].sort((a, b) => a.seat[0] - b.seat[0] || a.seat[1] - b.seat[1]).map(p => {
+    const s = byId[p.id] || { attention: 80, confusion: 10, state: "listening", bubble: "🙂", reason: "" };
+    const bg = `hsl(${120 - s.confusion * 1.2}, 70%, ${92 - (100 - s.attention) * 0.15}%)`;
+    return `<div class="s" id="st${p.id}" style="background:${bg}" title="${p.situation}\n\n${s.reason}">
+      <div class="b">${s.bubble}</div><div class="n">${p.emoji} ${p.name}</div><div class="st">${s.state}</div>
+      <div class="bar"><i style="width:${s.attention}%;background:#1f6feb"></i></div>
+      <div class="bar"><i style="width:${s.confusion}%;background:#d1242f"></i></div></div>`;
+  }).join("");
+}
+
+// ---------- student voices: queue so they never talk over each other ----------
+let speechQueue = Promise.resolve();
+function say(speaker) {
+  speechQueue = speechQueue.then(async () => {
+    const card = $("st" + speaker.id); card?.classList.add("speaking");
+    try {
+      const r = await api("/speak", { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ student_id: speaker.id, text: speaker.says }) });
+      if (r.status === 204) {               // mock mode: browser voice
+        await new Promise(res => { const u = new SpeechSynthesisUtterance(speaker.says); u.onend = res; speechSynthesis.speak(u); });
+      } else {
+        const audio = new Audio(URL.createObjectURL(await r.blob()));
+        await new Promise(res => { audio.onended = res; audio.onerror = res; audio.play(); });
+      }
+    } catch (e) { log("speak error " + e.message); }
+    card?.classList.remove("speaking");
+  });
+}
+
+// ---------- chunks: sent in order, without blocking recording ----------
+let chunkQueue = Promise.resolve();
+function sendChunk(text) {
+  const slide = $("slide").value === "" ? null : Number($("slide").value);
+  chunkQueue = chunkQueue.then(async () => {
+    const t = performance.now();
+    try {
+      const d = await (await api(`/sessions/${session.id}/chunk`, { method: "POST",
+        headers: { "content-type": "application/json" }, body: JSON.stringify({ text, slide_index: slide }) })).json();
+      renderClass(d.students);
+      $("stats").textContent = `attention ${d.class_attention} · confusion ${d.class_confusion} · chunk ${d.chunk_index}`;
+      log(`chunk ${d.chunk_index} (${((performance.now() - t) / 1000).toFixed(1)}s): ${d.summary}`);
+      d.speakers.forEach(sp => { log(`🗣 ${personas.find(p => p.id === sp.id).name} (${sp.action}): ${sp.says}`); say(sp); });
+    } catch (e) { log("chunk error " + e.message); }
+  });
+}
+
+// ---------- mic: a fresh MediaRecorder per chunk so every blob is a complete file ----------
+function recordOneChunk() {
+  if (!recording) return;
+  const rec = new MediaRecorder(stream, { mimeType: "audio/webm" });
+  const parts = [];
+  rec.ondataavailable = e => e.data.size && parts.push(e.data);
+  rec.onstop = async () => {
+    recordOneChunk();                       // start the next chunk immediately
+    const blob = new Blob(parts, { type: "audio/webm" });
+    if (blob.size < 2000) return;
+    const fd = new FormData();
+    fd.append("audio", blob, "chunk.webm");
+    fd.append("session_id", session.id);
+    if ($("slide").value !== "") fd.append("slide_index", $("slide").value);
+    if ($("lang").value) fd.append("language", $("lang").value);
+    try {
+      const { text } = await (await api("/transcribe", { method: "POST", body: fd })).json();
+      log("🎤 " + (text || "(silence)"));
+      if (text && text.split(/\s+/).length >= 3) sendChunk(text);
+    } catch (e) { log("transcribe error " + e.message); }
+  };
+  rec.start();
+  setTimeout(() => rec.state === "recording" && rec.stop(), Number($("secs").value) * 1000);
+}
+
+$("rec").onclick = async () => {
+  if (!recording) {
+    stream = stream || await navigator.mediaDevices.getUserMedia({ audio: true });
+    recording = true; $("rec").textContent = "⏹ Stop"; recordOneChunk();
+  } else {
+    recording = false; $("rec").textContent = "🎤 Start talking";
+  }
+};
+
+$("typed").onkeydown = (e) => {
+  if (e.key === "Enter" && session && e.target.value.trim()) { log("⌨️ " + e.target.value); sendChunk(e.target.value); e.target.value = ""; }
+};
+
+$("create").onclick = async () => {
+  const fd = new FormData();
+  fd.append("course", $("course").value);
+  if ($("slides").value.trim()) fd.append("slides_text", $("slides").value);
+  session = await (await api("/sessions", { method: "POST", body: fd })).json();
+  $("sid").textContent = "session " + session.id;
+  $("slide").innerHTML = `<option value="">(none)</option>` + session.slides.map(s => `<option value="${s.index}">${s.index + 1}. ${s.title}</option>`).join("");
+  if (session.slides.length) $("slide").value = "0";
+  ["analyze", "rec", "report", "reset"].forEach(id => $(id).disabled = false);
+  renderClass(session.students);
+  log("session created");
+};
+
+$("analyze").onclick = async () => {
+  log("analysing slides…");
+  const a = await (await api(`/sessions/${session.id}/analyze`, { method: "POST" })).json();
+  a.slides.forEach(s => log(`slide ${s.index + 1} risk ${s.risk}: ${s.top_issue || "ok"}`));
+};
+
+$("report").onclick = async () => {
+  $("reportOut").textContent = "building report…";
+  const r = await (await api(`/sessions/${session.id}/report`, { method: "POST" })).json();
+  $("reportOut").innerHTML = `<p>${r.coach.summary}</p><ol>${r.coach.top_changes.map(c => `<li>${c}</li>`).join("")}</ol>` +
+    r.fixes.map(f => `<p><b>Lost ${f.moment.lost_students.join(", ")} at chunk ${f.moment.chunk_index}</b> → ${f.selection.chosen_agent}: ${f.selection.final_fix}</p>`).join("");
+};
+
+$("reset").onclick = async () => { session = await (await api(`/sessions/${session.id}/reset`, { method: "POST" })).json(); renderClass(session.students); log("class reset"); };
+
+(async () => {
+  personas = await (await api("/personas")).json();
+  const h = await (await api("/health")).json();
+  log(h.mock ? "⚠️ MOCK mode (no OpenAI calls)" : "✅ live mode: " + JSON.stringify(h.models));
+  renderClass();
+})();
+</script>
+</body>
+</html>
