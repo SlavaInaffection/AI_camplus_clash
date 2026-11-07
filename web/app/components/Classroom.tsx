@@ -50,7 +50,8 @@ export default function Classroom() {
   const [log, setLog] = useState<string[]>([]);
   const [report, setReport] = useState<Report | null>(null);
   const [reportBusy, setReportBusy] = useState(false);
-  const [setupOpen, setSetupOpen] = useState(true);
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
 
   const sessionRef = useRef<Session | null>(null);
   const slideRef = useRef<number | null>(null);
@@ -173,9 +174,11 @@ export default function Classroom() {
     }
   }
 
-  async function start() {
+  async function start(): Promise<Session | null> {
     try {
       const s = await api.createSession(course, slidesText);
+      sessionRef.current = s;
+      slideRef.current = s.slides.length ? 0 : null;
       setSession(s);
       setStudents(initialStates());
       setSlideIndex(s.slides.length ? 0 : null);
@@ -187,9 +190,17 @@ export default function Classroom() {
         note("Analysing slides…");
         api.analyze(s.id).then((a) => a.slides.forEach((x) => note(`slide ${x.index + 1} · risk ${x.risk} · ${x.top_issue ?? "ok"}`))).catch(() => {});
       }
+      return s;
     } catch (e) {
       note(`⚠️ ${(e as Error).message}`);
+      return null;
     }
+  }
+
+  /** The one big button: starts a session with the current setup if needed, then the mic. */
+  async function startTalking() {
+    if (!recordingRef.current && !sessionRef.current && !(await start())) return;
+    await toggleMic();
   }
 
   async function getReport() {
@@ -239,15 +250,38 @@ export default function Classroom() {
   return (
     <div className={styles.page}>
       <header className={styles.top}>
-        <div>
+        <div className={styles.brand}>
           <p className={styles.eyebrow}>Rehearsal Room</p>
           <h1 className={styles.title}>{session ? session.course : "A flight simulator for teaching"}</h1>
         </div>
+
+        <button className={recording ? styles.talkOn : styles.talk} onClick={startTalking} aria-pressed={recording}
+          disabled={backend === "offline" || backend === "checking"}>
+          <span className={styles.dot} aria-hidden="true" />
+          {recording ? "Stop talking" : "Start talking"}
+        </button>
+
         <div className={styles.meters} aria-live="polite">
           <Meter label="Attention" value={stats?.attention ?? 80} tone="blue" />
           <Meter label="Confusion" value={stats?.confusion ?? 10} tone="pink" />
+          {pending > 0 && <span className={styles.pending}>Class is reacting…</span>}
+        </div>
+
+        <div className={styles.tools}>
+          {session && session.slides.length > 0 && (
+            <label>
+              <span className={styles.srOnly}>Current slide</span>
+              <select value={slideIndex ?? ""} onChange={(e) => setSlideIndex(e.target.value === "" ? null : Number(e.target.value))}>
+                {session.slides.map((sl) => <option key={sl.index} value={sl.index}>Slide {sl.index + 1}</option>)}
+              </select>
+            </label>
+          )}
+          {session && <button onClick={getReport} disabled={reportBusy}>{reportBusy ? "Building…" : "Report"}</button>}
+          {session && <button onClick={resetClass}>Reset</button>}
+          <button onClick={() => setSetupOpen(true)}>Setup</button>
+          <button onClick={() => setLogOpen((o) => !o)} aria-pressed={logOpen}>Log</button>
           <span className={`${styles.badge} ${styles[backend]}`}>
-            {backend === "live" ? "Live AI" : backend === "mock" ? "Mock mode" : backend === "offline" ? "Backend offline" : "…"}
+            {backend === "live" ? "Live AI" : backend === "mock" ? "Mock" : backend === "offline" ? "Offline" : "…"}
           </span>
         </div>
       </header>
@@ -255,7 +289,7 @@ export default function Classroom() {
       <main className={styles.room}>
         <div className={styles.board}>
           <p className={styles.boardLabel}>{slide ? `Slide ${slide.index + 1} of ${session?.slides.length}` : "Whiteboard"}</p>
-          <p className={styles.boardTitle}>{slide?.title ?? "Start a session, then talk to your class"}</p>
+          <p className={styles.boardTitle}>{slide?.title ?? "Press Start talking and teach your class"}</p>
           {stats?.summary && <p className={styles.boardSummary}>{stats.summary}</p>}
         </div>
 
@@ -289,61 +323,57 @@ export default function Classroom() {
             </div>
           ))}
         </div>
+
+        {session && (
+          <form className={styles.typeBar} onSubmit={(e) => { e.preventDefault(); if (typed.trim()) { note(`⌨️ ${typed}`); sendChunk(typed); setTyped(""); } }}>
+            <label className={styles.srOnly} htmlFor="typed">Say something to the class</label>
+            <input id="typed" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="No mic? Type what you would say and press Enter" />
+          </form>
+        )}
       </main>
 
-      <section className={styles.lectern} aria-label="Lectern controls">
-        {!session || setupOpen ? (
-          <div className={styles.setup}>
+      {logOpen && (
+        <aside className={styles.log} aria-label="Activity">
+          <div className={styles.panelHead}>
+            <h2>Activity</h2>
+            <button className={styles.close} onClick={() => setLogOpen(false)} aria-label="Close activity log">×</button>
+          </div>
+          {log.length === 0 && <p>Nothing yet.</p>}
+          {log.map((l, i) => <p key={log.length - i}>{l}</p>)}
+        </aside>
+      )}
+
+      {setupOpen && (
+        <div className={styles.backdrop} onClick={() => setSetupOpen(false)}>
+          <div className={styles.dialog} role="dialog" aria-label="Setup" onClick={(e) => e.stopPropagation()}>
+            <button className={styles.close} onClick={() => setSetupOpen(false)} aria-label="Close setup">×</button>
+            <h2>Setup</h2>
             <label className={styles.field}>
               <span>Course</span>
               <input value={course} onChange={(e) => setCourse(e.target.value)} />
             </label>
             <label className={styles.field}>
               <span>Slides (separate with a line ---)</span>
-              <textarea rows={4} value={slidesText} onChange={(e) => setSlidesText(e.target.value)} />
+              <textarea rows={7} value={slidesText} onChange={(e) => setSlidesText(e.target.value)} />
             </label>
             <div className={styles.actions}>
-              <button className={styles.primary} onClick={start} disabled={backend === "offline" || backend === "checking"}>Start rehearsal</button>
-              {session && <button onClick={() => setSetupOpen(false)}>Cancel</button>}
+              <button className={styles.primary} onClick={start} disabled={backend === "offline" || backend === "checking"}>
+                {session ? "Start a new session" : "Start session"}
+              </button>
+            </div>
+            <h3>Demo</h3>
+            <p className={styles.muted}>These work without a session, handy during the pitch.</p>
+            <div className={styles.actions}>
+              <button onClick={() => { setSetupOpen(false); demoRaiseHand(); }}>Raise a hand</button>
+              <button onClick={() => { setSetupOpen(false); demoShuffle(); }}>Shuffle moods</button>
             </div>
           </div>
-        ) : (
-          <div className={styles.controls}>
-            <button className={recording ? styles.recOn : styles.rec} onClick={toggleMic} aria-pressed={recording}>
-              {recording ? "Stop talking" : "Start talking"}
-            </button>
-            <form className={styles.typeForm} onSubmit={(e) => { e.preventDefault(); if (typed.trim()) { note(`⌨️ ${typed}`); sendChunk(typed); setTyped(""); } }}>
-              <label className={styles.srOnly} htmlFor="typed">Say something to the class</label>
-              <input id="typed" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="…or type what you would say, then press Enter" />
-            </form>
-            {session.slides.length > 0 && (
-              <label className={styles.slidePick}>
-                <span className={styles.srOnly}>Current slide</span>
-                <select value={slideIndex ?? ""} onChange={(e) => setSlideIndex(e.target.value === "" ? null : Number(e.target.value))}>
-                  {session.slides.map((s) => <option key={s.index} value={s.index}>{s.index + 1}. {s.title}</option>)}
-                </select>
-              </label>
-            )}
-            <span className={styles.pending}>{pending > 0 ? `Class is reacting… (${pending})` : ""}</span>
-            <button onClick={getReport} disabled={reportBusy}>{reportBusy ? "Building report…" : "Report"}</button>
-            <button onClick={resetClass}>Reset class</button>
-            <button onClick={() => setSetupOpen(true)}>New session</button>
-          </div>
-        )}
-        <div className={styles.demo}>
-          <span>Demo</span>
-          <button onClick={demoRaiseHand}>Raise a hand</button>
-          <button onClick={demoShuffle}>Shuffle moods</button>
         </div>
-      </section>
-
-      <aside className={styles.log} aria-label="Activity">
-        {log.map((l, i) => <p key={log.length - i}>{l}</p>)}
-      </aside>
+      )}
 
       {report && (
-        <div className={styles.reportBackdrop} onClick={() => setReport(null)}>
-          <div className={styles.report} role="dialog" aria-label="Rehearsal report" onClick={(e) => e.stopPropagation()}>
+        <div className={styles.backdrop} onClick={() => setReport(null)}>
+          <div className={styles.dialog} role="dialog" aria-label="Rehearsal report" onClick={(e) => e.stopPropagation()}>
             <button className={styles.close} onClick={() => setReport(null)} aria-label="Close report">×</button>
             <h2>How did it go?</h2>
             <p>{report.coach.summary}</p>
