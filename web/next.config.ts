@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 
 // The FastAPI backend (uvicorn server:app --port 8000). The browser only talks to Next,
@@ -5,6 +6,8 @@ import type { NextConfig } from "next";
 const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8000";
 
 const nextConfig: NextConfig = {
+  // the repo root also has a package-lock.json; pin the app root to web/
+  turbopack: { root: path.join(__dirname) },
   cacheComponents: true,
   partialPrefetching: true,
   experimental: {
