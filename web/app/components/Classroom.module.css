@@ -119,10 +119,10 @@
   gap: 0.8cqh;
   container-type: size;
 }
-.row { display: flex; justify-content: center; gap: calc(min(32px, 2.4cqi) * var(--scale)); }
+.row { display: flex; justify-content: center; gap: calc(min(24px, 1.6cqi) * var(--scale)); }
 .seat {
   /* as big as the room allows: limited by width (5 per row) and by height (3 rows + board) */
-  --w: min(210px, 15.5cqi, calc((100cqh - 150px) / 2.85));
+  --w: min(250px, 17.6cqi, calc((100cqh - 110px) / 2.05));
   position: relative;
   width: calc(var(--w) * var(--scale));
   display: flex;
@@ -133,7 +133,7 @@
 .desk {
   position: relative;
   z-index: 1;
-  width: 118%;
+  width: 106%;
   box-sizing: border-box;
   padding: 6px 10px 8px;
   border-radius: 10px 10px 6px 6px;

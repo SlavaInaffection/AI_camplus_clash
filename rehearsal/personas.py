@@ -3,7 +3,7 @@
 seat = (row, col) for the 3D layout: 3 rows x 5 desks, row 0 is the front.
 """
 
-PERSONAS = [
+ALL_PERSONAS = [
     {"id": 0, "voice": "coral", "voice_style": "Young Italian woman, polite, slightly anxious, speaks quickly.", "name": "Giulia", "emoji": "📝", "seat": [0, 0],
      "situation": "Diligent, takes notes on everything. Gets anxious when the lecturer moves on before she has written it down.",
      "knowledge": "Solid prerequisites", "loses_focus_when": "Pace is too fast or slides are dense"},
@@ -50,6 +50,9 @@ PERSONAS = [
      "situation": "Confident, asks lots of questions, sometimes jumps ahead. Good at exposing gaps the lecturer skipped.",
      "knowledge": "Average prerequisites", "loses_focus_when": "Hand-waving or 'it is obvious that...'"},
 ]
+
+# The class in the room: the front row (seat row 0) was removed from the classroom.
+PERSONAS = [p for p in ALL_PERSONAS if p["seat"][0] >= 1]
 
 BY_ID = {p["id"]: p for p in PERSONAS}
 

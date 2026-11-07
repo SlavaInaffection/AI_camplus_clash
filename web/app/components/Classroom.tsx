@@ -3,12 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { LOOKS } from "../lib/characters";
-import { STATES, STATE_MOOD, STATE_WORDS, type Analysis, type ChunkResult, type Persona, type Report, type Session, type StudentState, type StudentStateName } from "../lib/types";
+
+// the students in the room: the back two rows (the front row was removed)
+const CLASS = LOOKS.filter((l) => l.id >= 5);
+import { STATES, type Analysis, type ChunkResult, type Persona, type Report, type Session, type StudentState, type StudentStateName } from "../lib/types";
 import Student from "./Student";
 import styles from "./Classroom.module.css";
 
-const ROWS = [2, 1, 0]; // back row first (top of the screen), front row nearest the lectern
-const ROW_SCALE: Record<number, number> = { 2: 0.8, 1: 0.9, 0: 1 };
+const ROWS = [2, 1]; // back row first (top of the screen), front row nearest the lectern
+const ROW_SCALE: Record<number, number> = { 2: 0.9, 1: 1 };
 const CHUNK_SECONDS = 10;
 
 const DEFAULT_SLIDES = `Hypothesis testing
@@ -57,7 +60,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 type Speaking = { id: number; says: string; action: string } | null;
 
 const initialStates = (): Record<number, StudentState> =>
-  Object.fromEntries(LOOKS.map((l) => [l.id, { id: l.id, attention: 80, confusion: 10, state: "listening", reason: "Start of lecture" }]));
+  Object.fromEntries(CLASS.map((l) => [l.id, { id: l.id, attention: 80, confusion: 10, state: "listening", reason: "Start of lecture" }]));
 
 export default function Classroom() {
   const [personas, setPersonas] = useState<Persona[]>([]);
@@ -307,7 +310,7 @@ export default function Classroom() {
 
   // --- demo buttons: work without the backend ---
   function demoRaiseHand() {
-    const candidates = LOOKS.filter((l) => students[l.id].state !== "hand_raised");
+    const candidates = CLASS.filter((l) => students[l.id].state !== "hand_raised");
     const who = candidates[Math.floor(Math.random() * candidates.length)];
     say({ id: who.id, says: DEMO_QUESTIONS[Math.floor(Math.random() * DEMO_QUESTIONS.length)], action: "raise_hand" });
   }
@@ -324,7 +327,7 @@ export default function Classroom() {
   const seats = useMemo(() => {
     const byRow: Record<number, number[]> = { 0: [], 1: [], 2: [] };
     const seatOf = (id: number) => personas.find((p) => p.id === id)?.seat ?? [Math.floor(id / 5), id % 5];
-    for (const l of LOOKS) byRow[seatOf(l.id)[0]].push(l.id);
+    for (const l of CLASS) byRow[seatOf(l.id)[0]].push(l.id);
     for (const r of ROWS) byRow[r].sort((a, b) => seatOf(a)[1] - seatOf(b)[1]);
     return byRow;
   }, [personas]);
@@ -441,7 +444,6 @@ export default function Classroom() {
                     </div>
                     <div className={styles.desk}>
                       <span className={styles.name}>{nameOf(id)}</span>
-                      <span className={`${styles.mood} ${styles[STATE_MOOD[st.state]]}`}>{STATE_WORDS[st.state]}</span>
                       <span className={styles.bar} aria-label={`attention ${st.attention}`}>
                         <i style={{ width: `${st.attention}%` }} />
                       </span>
