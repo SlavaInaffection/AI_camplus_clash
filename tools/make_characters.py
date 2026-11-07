@@ -36,7 +36,7 @@ STUDENTS = [
     (8, "Marco", 190, "cap", []),
     (9, "Fatima", 355, "curly", []),
     (10, "Tommaso", 95, "spiky", []),
-    (11, "Sofia", 300, "beanie", ["headphones"]),
+    (11, "Sofia", 300, "beanie_long", []),
     (12, "Davide", 170, "curly_short", ["glasses"]),
     (13, "Nadia", 265, "long", ["thick_glasses"]),
     (14, "Riccardo", 28, "quiff", []),
@@ -150,6 +150,14 @@ def hair(style, c):
                  f'<path d="M50,64 C50,30 76,22 100,22 C124,22 150,30 150,64 Z" fill="{c["cloth_dark"]}"/>'
                  f'<path d="M48,62 L152,62 Q170,64 176,72 Q150,74 48,70 Z" fill="{c["shoe"]}"/>'
                  f'<circle cx="100" cy="24" r="5" fill="{c["shoe"]}"/>')
+    elif style == "beanie_long":
+        back = f'<path d="M44,80 C40,40 72,30 100,30 C128,30 160,40 156,80 L160,170 Q152,180 140,172 L60,172 Q48,180 40,170 Z" fill="{d}"/>'
+        front = (f'<path d="M50,88 C46,70 54,60 64,58 L136,58 C146,60 154,70 150,88 C140,74 122,70 100,70 C78,70 60,74 50,88 Z" fill="{h}"/>'
+                 f'<path d="M50,72 C46,96 48,120 54,138 L62,136 C58,116 58,94 62,74 Z" fill="{h}"/>'
+                 f'<path d="M150,72 C154,96 152,120 146,138 L138,136 C142,116 142,94 138,74 Z" fill="{h}"/>'
+                 f'<path d="M50,62 C48,26 76,16 100,16 C124,16 152,26 150,62 Z" fill="{c["accent"]}"/>'
+                 f'<rect x="46" y="54" width="108" height="16" rx="8" fill="{c["cloth_dark"]}"/>'
+                 f'<circle cx="100" cy="14" r="9" fill="{c["accent"]}"/>')
     elif style == "beanie":
         front = (f'<path d="M50,88 C46,70 54,60 64,58 L136,58 C146,60 154,70 150,88 C140,74 122,70 100,70 C78,70 60,74 50,88 Z" fill="{h}"/>'
                  f'<path d="M50,62 C48,26 76,16 100,16 C124,16 152,26 150,62 Z" fill="{c["accent"]}"/>'
@@ -278,7 +286,7 @@ def character(student, state):
     hair_back, hair_front = hair(style, c)
     arms_behind = "".join(arm(c, *a) for a in behind)
     arms_front = "".join(arm(c, *a) for a in front)
-    head_group = (f'<g transform="rotate({tilt} 100 132)">{hair_back}{head(c)}{hair_front}'
+    head_group = (f'<g transform="rotate({tilt} 100 132)">{head(c)}{hair_front}'
                   f'{face(state, c)}{accessories(acc, c)}</g>')
     # bored / confused: the hand goes to the chin or head, so draw it over the head
     over_head = state in ("bored", "confused")
@@ -287,6 +295,7 @@ def character(student, state):
         arms_front = "".join(arm(c, *a) for a in front[:-1])
     parts = [
         f'<ellipse cx="100" cy="228" rx="58" ry="8" fill="{INK}" opacity="0.10"/>',
+        f'<g transform="rotate({tilt} 100 132)">{hair_back}</g>',
         arms_behind,
         body(c),
         neckwear(acc, c),
