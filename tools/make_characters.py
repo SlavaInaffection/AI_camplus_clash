@@ -63,8 +63,15 @@ def palette(h):
 def arm(c, sx, sy, angle, length=46):
     """An arm hanging from shoulder (sx, sy); angle 0 = straight down, positive swings left."""
     return (f'<g transform="rotate({angle} {sx} {sy})">'
-            f'<rect x="{sx - 8}" y="{sy - 4}" width="16" height="{length}" rx="8" fill="{c["cloth"]}"/>'
+            f'<rect x="{sx - 8}" y="{sy - 8}" width="16" height="{length + 8}" rx="8" fill="{c["cloth"]}"/>'
             f'<circle cx="{sx}" cy="{sy + length}" r="8.5" fill="{c["skin"]}"/></g>')
+
+
+def hand(c, sx, sy, angle, length=46):
+    """Just the hand of an arm, for drawing over a held object."""
+    import math
+    t = math.radians(angle)
+    return f'<circle cx="{sx - math.sin(t) * length:.1f}" cy="{sy + math.cos(t) * length:.1f}" r="8.5" fill="{c["skin"]}"/>'
 
 
 def body(c):
@@ -73,9 +80,14 @@ def body(c):
         f'<rect x="104" y="184" width="20" height="38" rx="9" fill="{c["pants"]}"/>'
         f'<ellipse cx="85" cy="223" rx="14" ry="7.5" fill="{c["shoe"]}"/>'
         f'<ellipse cx="115" cy="223" rx="14" ry="7.5" fill="{c["shoe"]}"/>'
-        f'<path d="M62,192 C60,160 68,134 100,131 C132,134 140,160 138,192 Q100,200 62,192 Z" fill="{c["cloth"]}"/>'
-        f'<path d="M62,192 Q100,200 138,192 L138,184 Q100,192 62,184 Z" fill="{c["cloth_dark"]}"/>'
-        f'<path d="M88,134 Q100,146 112,134" fill="none" stroke="{c["cloth_dark"]}" stroke-width="4" stroke-linecap="round"/>'
+        # neck: visible between head and collar
+        f'<rect x="89" y="116" width="22" height="30" rx="10" fill="{c["skin_shade"]}"/>'
+        # torso with wide, rounded shoulders so the arms grow out of it
+        f'<path d="M58,192 C55,170 56,150 68,142 C78,137 88,136 100,136 C112,136 122,137 132,142 '
+        f'C144,150 145,170 142,192 Q100,200 58,192 Z" fill="{c["cloth"]}"/>'
+        f'<path d="M58,192 Q100,200 142,192 L142,184 Q100,192 58,184 Z" fill="{c["cloth_dark"]}"/>'
+        # crew-neck collar around the neck
+        f'<path d="M86,138 Q100,150 114,138" fill="none" stroke="{c["cloth_dark"]}" stroke-width="4" stroke-linecap="round"/>'
     )
 
 
@@ -83,8 +95,7 @@ HEAD = (100, 86)  # centre; rx 52, ry 48
 
 
 def head(c):
-    return (f'<ellipse cx="100" cy="132" rx="16" ry="6" fill="{c["skin_shade"]}"/>'
-            f'<ellipse cx="100" cy="86" rx="52" ry="48" fill="{c["skin"]}"/>'
+    return (f'<ellipse cx="100" cy="86" rx="52" ry="48" fill="{c["skin"]}"/>'
             f'<ellipse cx="48" cy="92" rx="7" ry="10" fill="{c["skin"]}"/>'
             f'<ellipse cx="152" cy="92" rx="7" ry="10" fill="{c["skin"]}"/>')
 
@@ -230,17 +241,17 @@ def face(state, c):
 
 # --- poses ------------------------------------------------------------------
 
-POSES = {  # head tilt, arms behind head, arms in front, prop
-    "listening": (0, [(64, 142, 9), (136, 142, -9)], [], None),
-    "taking_notes": (4, [], [(66, 144, -40, 36), (134, 144, 40, 36)], "notebook"),
-    "nodding": (-6, [(64, 142, 9), (136, 142, -9)], [], None),
-    "confused": (-8, [(64, 142, 9)], [(136, 142, 150, 34)], None),
-    "lost": (5, [(64, 142, 14), (136, 142, -14)], [], "sweat"),
-    "bored": (-10, [(64, 142, 9)], [(136, 142, 128, 30)], None),
-    "sleeping": (16, [(64, 142, 6), (136, 142, -6)], [], "zzz"),
-    "on_phone": (8, [], [(66, 144, -40, 34), (134, 144, 40, 34)], "phone"),
-    "excited": (-4, [(64, 140, 140), (136, 140, -140)], [], None),
-    "hand_raised": (-6, [(64, 142, 12), (138, 140, -158, 96)], [], None),
+POSES = {  # head tilt, arms drawn before the torso, arms drawn after it, prop
+    "listening": (0, [], [(70, 150, 8), (130, 150, -8)], None),
+    "taking_notes": (4, [], [(72, 152, -23, 30), (128, 152, 23, 30)], "notebook"),
+    "nodding": (-6, [], [(70, 150, 8), (130, 150, -8)], None),
+    "confused": (-8, [], [(70, 150, 8), (130, 150, 150, 34)], None),
+    "lost": (5, [], [(70, 150, 13), (130, 150, -13)], "sweat"),
+    "bored": (-10, [], [(70, 150, 8), (130, 150, 128, 30)], None),
+    "sleeping": (16, [], [(70, 150, 5), (130, 150, -5)], "zzz"),
+    "on_phone": (8, [], [(72, 152, -40, 31), (128, 152, 40, 31)], "phone"),
+    "excited": (-4, [(70, 148, 140), (130, 148, -140)], [], None),
+    "hand_raised": (-6, [(132, 146, -158, 96)], [(70, 150, 10)], None),
 }
 
 
@@ -271,15 +282,19 @@ def character(student, state):
                   f'{face(state, c)}{accessories(acc, c)}</g>')
     # bored / confused: the hand goes to the chin or head, so draw it over the head
     over_head = state in ("bored", "confused")
+    chin_arm = arm(c, *front[-1]) if over_head else ""
+    if over_head:
+        arms_front = "".join(arm(c, *a) for a in front[:-1])
     parts = [
         f'<ellipse cx="100" cy="228" rx="58" ry="8" fill="{INK}" opacity="0.10"/>',
         arms_behind,
         body(c),
         neckwear(acc, c),
-        "" if over_head else arms_front,
+        arms_front,
         prop(p, c) if p in ("notebook", "phone") else "",
+        "".join(hand(c, *a) for a in front) if p in ("notebook", "phone") else "",  # hands on top of the object
         head_group,
-        arms_front if over_head else "",
+        chin_arm,
         prop(p, c) if p in ("sweat", "zzz") else "",
     ]
     return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 240" width="200" height="240" '
