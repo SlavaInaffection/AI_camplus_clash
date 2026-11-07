@@ -62,6 +62,20 @@ Open http://localhost:8000/docs to try every endpoint.
 `state` is one of: `listening, taking_notes, nodding, confused, lost, bored, sleeping, on_phone, excited, hand_raised`
 `action` is one of: `raise_hand, interrupt, whisper_to_neighbour`
 
-## Frontend
+## Frontend (Next.js, `web/`)
+
+The animated classroom: 15 students at desks, animated live from `/chunk`. Students raise their hand and speak in their own voice.
+
+```bash
+.venv/bin/uvicorn server:app --port 8000   # backend
+cd web && npm install && npm run dev        # http://localhost:3000
+```
+
+Next proxies `/api/*` to the backend (`BACKEND_URL`, default `http://localhost:8000`). The **Demo** buttons (Raise a hand, Shuffle moods) work without starting a session.
+
+- `web/app/components/Student.tsx`: one animated student. Arms, head and props transition between the 10 states.
+- `web/app/components/Classroom.tsx`: the room, the mic loop, the voices and the report.
+
+## Static test page
 
 Put the 3D classroom in `frontend/index.html`. The server serves it at `/` automatically, so there are no CORS issues (CORS is open anyway).

@@ -1,0 +1,127 @@
+.student {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+/* the whole body: idle breathing, hops and bounces per state */
+.body {
+  transform-box: view-box;
+  transform-origin: 100px 228px;
+  animation: breathe 3.2s ease-in-out infinite;
+}
+
+/* raising a hand: a quick eager hop, then settle */
+.hand_raised .body {
+  animation: hop 520ms cubic-bezier(.34, 1.56, .64, 1) 1, breathe 3.2s ease-in-out 520ms infinite;
+}
+
+.excited .body {
+  animation: bounce 700ms ease-in-out infinite;
+}
+
+.sleeping .body {
+  animation: breathe 4.5s ease-in-out infinite;
+}
+
+.nodding .head {
+  transform-box: view-box;
+  transform-origin: 100px 130px;
+  animation: nod 900ms ease-in-out infinite;
+}
+
+.lost .head {
+  transform-box: view-box;
+  transform-origin: 100px 130px;
+  animation: wobble 2.4s ease-in-out infinite;
+}
+
+/* waving hand while talking */
+.wave {
+  animation: wave 900ms ease-in-out infinite;
+}
+
+/* eyes blink every few seconds */
+.blink {
+  animation: blink 5s infinite;
+}
+
+.pop {
+  animation: pop 260ms ease-out;
+}
+
+.fadeIn {
+  animation: fadeIn 300ms ease-out;
+}
+
+.zzz {
+  animation: floatUp 2.6s ease-in-out infinite;
+}
+
+.drip {
+  animation: drip 1.6s ease-in infinite;
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1, 1); }
+  50% { transform: scale(1.012, 0.988); }
+}
+
+@keyframes hop {
+  0% { transform: translateY(0); }
+  40% { transform: translateY(-14px); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes nod {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(6deg) translateY(2px); }
+}
+
+@keyframes wobble {
+  0%, 100% { transform: rotate(-2deg); }
+  50% { transform: rotate(2deg); }
+}
+
+@keyframes wave {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-9deg); }
+  75% { transform: rotate(9deg); }
+}
+
+@keyframes blink {
+  0%, 46%, 50%, 100% { transform: scaleY(1); }
+  48% { transform: scaleY(0.1); }
+}
+
+@keyframes pop {
+  from { opacity: 0.4; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes floatUp {
+  0% { opacity: 0; transform: translateY(6px); }
+  30% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-10px); }
+}
+
+@keyframes drip {
+  0% { opacity: 0; transform: translateY(-4px); }
+  30% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(10px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .body, .head, .wave, .blink, .zzz, .drip, .pop, .fadeIn { animation: none !important; }
+}
