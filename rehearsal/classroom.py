@@ -18,7 +18,7 @@ from .llm import ask
 from .personas import BY_ID, PERSONAS, initial_states
 from .schemas import (
     ChunkResult, CoachSummary, DirectorTurn, FixProposal, FixSelection, LectureAnalysis, LostMoment, MomentFix,
-    RehearsalReport, Slide, Speaker, StudentJourney, StudentLine, StudentState,
+    RehearsalReport, Slide, Speaker, SpeakerPick, StudentJourney, StudentLine, StudentState,
 )
 
 RECENT_CHUNKS = 3
@@ -29,6 +29,8 @@ MIN_CHUNKS_SAME_STUDENT = 12      # ~48s before the same student speaks again
 # Riccardo (id 14) is the "confident asker" — hard-cap him harder than the prompt alone.
 RICCARDO_ID = 14
 MIN_CHUNKS_RICCARDO = 18          # ~72s — stops him monopolizing Q&A
+CHEN_ID = 6                       # shy — almost never the public asker
+MIN_CHUNKS_CHEN = 20
 INVITE_RE = re.compile(
     r"\b(any questions|questions\??|ask(?:\s+me)?|speak up|raise (?:your )?hand|"
     r"does that make sense|is that clear|before we move on)\b",
@@ -68,23 +70,26 @@ SESSIONS: dict[str, Session] = {}
 # --- Director ---------------------------------------------------------------
 
 DIRECTOR_SYSTEM = """You are the Director of a simulated university classroom used by lecturers to rehearse.
-You receive a compact class roster, current states, optional slide context, and a short transcript chunk.
+You receive a compact class roster, current states, optional slide context, recent speakers, and a short transcript chunk.
 
-Most chunks have ZERO speakers. A real lecture is mostly silent faces changing — not a Q&A show.
-Show reactions through attention/confusion/state/bubble. Do not pack the room with questions.
+Keep the room CALM. A real lecture is mostly quiet faces — listening, nodding, taking notes.
+Do NOT paint half the class as confused. At most ONE or TWO students may be "confused"; everyone else
+stays listening / taking_notes / nodding unless something is clearly catastrophic.
+"lost" / "sleeping" / "on_phone" should be rare. Prefer small attention/confusion drifts over dramatic states.
 
-Update EVERY student realistically:
-- Changes are gradual (usually within +/-20 per chunk) unless something clearly helps or hurts.
-- Base every change on the student's situation AND a learning-science principle. "reason" = max 12 words.
-- Good teaching moves (example, recap, question, visual, defining a term) should bring students back.
-- Speakers: default to []. At most ONE.
-  Speak ONLY when: (a) the lecturer clearly invites questions / pauses for the class, OR
-  (b) a student is badly stuck (confusion high / lost) on something just said and would realistically break silence.
-  Never invent a question for "energy". Never a multi-part interrogation.
-- Do NOT default to Riccardo. Prefer variety (Mateo, Amira, Paolo, Elena, Fatima, Chen whispering, etc.).
-- If someone speaks, "says" = one short natural sentence in the lecture language.
-- bubble is one emoji that matches the state.
-Do not invent what the lecturer said; react only to the transcript."""
+Most chunks have ZERO speakers. Not a Q&A show.
+
+Update EVERY student:
+- Changes are gradual (usually within +/-15 per chunk).
+- "reason" = max 12 words, learning-science grounded.
+- Good teaching moves bring people back toward listening/nodding.
+- Speakers: default []. At most ONE.
+  Speak ONLY when: (a) the lecturer invites questions, OR (b) one student is badly stuck on what was just said.
+- ROTATE speakers. Prefer someone in "prefer_speakers" who has not spoken recently.
+  NEVER default to Chen or Riccardo. Chen almost never speaks in public (rare whisper at most).
+- If someone speaks, "says" = one short natural sentence about the last thing said.
+- bubble matches state.
+React only to the transcript; do not invent what the lecturer said."""
 
 
 def _roster_compact() -> list[dict]:
@@ -113,7 +118,58 @@ def _slide(session: Session, slide_index: Optional[int]) -> Optional[dict]:
     return slide
 
 
+def _prefer_speakers(session: Session) -> list[int]:
+    """Students who have spoken least so far — used to break Chen/Riccardo monopolies."""
+    counts = {p["id"]: 0 for p in PERSONAS}
+    for c in session.chunks:
+        for sp in c["result"].speakers:
+            if sp.id in counts:
+                counts[sp.id] += 1
+    ranked = sorted(counts.keys(), key=lambda i: (counts[i], i))
+    return [i for i in ranked if i != CHEN_ID][:6]
+
+
+def _temper_reactions(prev: list[dict], students: list[StudentState]) -> list[StudentState]:
+    """Keep the room from looking like a panic — most faces stay calm."""
+    by_old = {s["id"]: s for s in prev}
+    tempered: list[StudentState] = []
+    for s in students:
+        old = by_old.get(s.id, {})
+        # Slow confusion spikes
+        old_c = int(old.get("confusion", 10))
+        if s.confusion > old_c + 12:
+            s.confusion = old_c + 12
+        # Don't mark confused unless confusion is actually high
+        if s.state == "confused" and s.confusion < 55:
+            s.state = "listening" if s.attention >= 50 else "bored"
+        if s.state == "lost" and s.confusion < 75:
+            s.state = "confused" if s.confusion >= 55 else "listening"
+        # Soft default faces
+        if s.state in ("excited",) and s.attention < 85:
+            s.state = "nodding"
+        tempered.append(s)
+
+    dramatic = [s for s in tempered if s.state in ("confused", "lost", "sleeping", "on_phone")]
+    dramatic.sort(key=lambda s: (-s.confusion, s.id))
+    keep = {s.id for s in dramatic[:2]}  # at most two stressed faces
+    for s in tempered:
+        if s.id not in keep and s.state in ("confused", "lost", "sleeping", "on_phone"):
+            s.state = "listening"
+            s.confusion = min(s.confusion, 40)
+            s.bubble = "🙂"
+        elif s.state == "confused":
+            s.bubble = "🤔"
+        elif s.state == "listening":
+            s.bubble = "🙂"
+        elif s.state == "nodding":
+            s.bubble = "👍"
+        elif s.state == "taking_notes":
+            s.bubble = "📝"
+    return tempered
+
+
 def direct(session: Session, text: str, slide_index: Optional[int]) -> DirectorTurn:
+    prefer = _prefer_speakers(session)
     payload = {
         "course": session.course,
         "roster": _roster_compact(),
@@ -124,6 +180,10 @@ def direct(session: Session, text: str, slide_index: Optional[int]) -> DirectorT
         "recent_transcript": [c["text"][:280] for c in session.chunks[-RECENT_CHUNKS:]],
         "new_chunk": text[:500],
         "chunk_index": len(session.chunks),
+        "prefer_speakers": prefer,
+        "recent_speakers": [
+            {"id": sid, "chunk": at} for sid, at in sorted(session.last_spoke_at.items(), key=lambda x: -x[1])[:5]
+        ],
     }
     turn = ask("Director", "director", DIRECTOR_SYSTEM, payload, DirectorTurn,
                lambda: mock.director(session.states, len(session.chunks)))
@@ -140,30 +200,58 @@ def direct(session: Session, text: str, slide_index: Optional[int]) -> DirectorT
             merged.append(new)
         else:
             merged.append(StudentState(**old))
-    turn.students = merged
+    turn.students = _temper_reactions(session.states, merged)
     turn.speakers = _filter_speakers(
-        session, [sp for sp in turn.speakers if sp.id in BY_ID][:1], text
+        session, [sp for sp in turn.speakers if sp.id in BY_ID][:1], text, prefer
     )
     return turn
 
 
-def _filter_speakers(session: Session, speakers: list, transcript: str) -> list:
-    """Hard rate-limits so the classroom does not turn into constant Q&A."""
+def _filter_speakers(session: Session, speakers: list, transcript: str, prefer: list[int]) -> list:
+    """Hard rate-limits + rotation so one shy student does not become the class voice."""
     if not speakers:
         return []
     chunk_i = len(session.chunks)
     invited = bool(INVITE_RE.search(transcript))
-    # Normal silence window; if the lecturer invites questions, only need a short gap.
     min_gap = 2 if invited else MIN_CHUNKS_BETWEEN_SPEAKERS
     if session.last_speaker_chunk is not None and chunk_i - session.last_speaker_chunk < min_gap:
         return []
+
+    def cooldown_for(sid: int) -> int:
+        if sid == RICCARDO_ID:
+            return MIN_CHUNKS_RICCARDO
+        if sid == CHEN_ID:
+            return MIN_CHUNKS_CHEN
+        return MIN_CHUNKS_SAME_STUDENT
+
     kept = []
     for sp in speakers:
         last = session.last_spoke_at.get(sp.id)
-        cooldown = MIN_CHUNKS_RICCARDO if sp.id == RICCARDO_ID else MIN_CHUNKS_SAME_STUDENT
-        if last is not None and chunk_i - last < cooldown:
+        if last is not None and chunk_i - last < cooldown_for(sp.id):
             continue
+        # Chen: public hand-raises are off; rare whisper only
+        if sp.id == CHEN_ID:
+            if sp.action != "whisper_to_neighbour":
+                continue
+            sp.action = "whisper_to_neighbour"
         kept.append(sp)
+
+    if not kept and speakers and prefer:
+        # Model picked someone on cooldown — try redirecting the line to a preferred classmate
+        original = speakers[0]
+        for pid in prefer:
+            last = session.last_spoke_at.get(pid)
+            if last is not None and chunk_i - last < cooldown_for(pid):
+                continue
+            if pid == CHEN_ID:
+                continue
+            kept = [SpeakerPick(
+                id=pid,
+                action="raise_hand" if original.action != "whisper_to_neighbour" else "whisper_to_neighbour",
+                intent=original.intent,
+                says=original.says,
+            )]
+            break
     return kept[:1]
 
 

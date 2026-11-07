@@ -258,17 +258,13 @@ function Prop({ kind, c }: { kind: Pose["prop"]; c: Palette }) {
 const star = (cx: number, cy: number, r: number) =>
   `M${cx},${cy - r} Q${cx},${cy} ${cx + r},${cy} Q${cx},${cy} ${cx},${cy + r} Q${cx},${cy} ${cx - r},${cy} Q${cx},${cy} ${cx},${cy - r} Z`;
 
-/** A small drawn sign above the head so the state reads at a glance (no emoji). */
+/** Subtle head cue — no floating "?" (that made half the class look panicked). */
 function Cue({ state, c }: { state: StudentStateName; c: Palette }) {
   switch (state) {
     case "confused":
-      return <g className={styles.bob}>
-        <path d="M156,22 Q156,8 168,8 Q180,8 180,20 Q180,28 170,32 L170,38" fill="none" stroke={c.hairDark} strokeWidth={5} strokeLinecap="round" strokeLinejoin="round" />
-        <circle cx={170} cy={48} r={3.4} fill={c.hairDark} />
-      </g>;
     case "lost":
-      return <path className={styles.spin} d="M168,24 m-3,0 a3,3 0 1,1 6,0 a6,6 0 1,1 -12,0 a9,9 0 1,1 18,0 a12,12 0 1,1 -24,0"
-        fill="none" stroke={c.hairDark} strokeWidth={3} strokeLinecap="round" />;
+      // Face expression already carries this; skip the question-mark prop.
+      return null;
     case "excited":
       return <g className={styles.twinkle}>
         <path d={star(166, 26, 11)} fill="#f5b400" />

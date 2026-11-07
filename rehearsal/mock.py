@@ -37,29 +37,30 @@ def director(states: list[dict], chunk_index: int) -> DirectorTurn:
     rng = random.Random(chunk_index)
     out = []
     for s in states:
-        drift = rng.randint(-20, 12)
+        drift = rng.randint(-10, 8)
         attention = max(0, min(100, s["attention"] + drift))
-        confusion = max(0, min(100, s["confusion"] + rng.randint(-10, 22)))
-        if attention < 25:
-            state = rng.choice(["sleeping", "on_phone"])
-        elif confusion > 70:
-            state = "lost"
-        elif confusion > 45:
+        confusion = max(0, min(100, s["confusion"] + rng.randint(-8, 10)))
+        if attention < 20:
+            state = rng.choice(["bored", "on_phone"])
+        elif confusion > 75:
             state = "confused"
         elif attention > 75:
-            state = rng.choice(["taking_notes", "nodding", "listening", "excited"])
+            state = rng.choice(["taking_notes", "nodding", "listening"])
         else:
-            state = rng.choice(["listening", "bored"])
+            state = rng.choice(["listening", "taking_notes", "nodding"])
         out.append(StudentState(id=s["id"], attention=attention, confusion=confusion, state=state,
                                 bubble=BUBBLES[state], reason=f"[mock] {BY_ID[s['id']]['loses_focus_when']}"))
+    # At most two confused faces in mock mode
+    stressed = [s for s in out if s.state == "confused"]
+    for s in stressed[2:]:
+        s.state, s.bubble, s.confusion = "listening", BUBBLES["listening"], min(s.confusion, 35)
     speakers = []
-    confused = [s for s in out if s.state in ("confused", "lost")]
-    if confused and chunk_index % 2 == 1:
-        who = rng.choice(confused)
+    pool = [s for s in out if s.id != 6]  # don't default to Chen
+    if pool and chunk_index > 0 and chunk_index % 5 == 0:
+        who = pool[chunk_index % len(pool)]
         who.state, who.bubble = "hand_raised", BUBBLES["hand_raised"]
-        action = "whisper_to_neighbour" if who.id == 6 else "raise_hand"
         speakers.append(SpeakerPick(
-            id=who.id, action=action, intent="ask to clarify the last point",
+            id=who.id, action="raise_hand", intent="ask to clarify the last point",
             says="Sorry — could you say that last bit again with an example?",
         ))
     return DirectorTurn(students=out, speakers=speakers, chunk_summary=f"[mock] chunk {chunk_index}")
