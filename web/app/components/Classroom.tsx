@@ -40,6 +40,18 @@ function splitSlide(text: string) {
   };
 }
 
+const ALERT_MS = 5500; // how long the "!" shows before a student asks
+
+/** Fade a looping sound out instead of cutting it. */
+async function fadeOut(a: HTMLAudioElement, ms = 350) {
+  const from = a.volume;
+  for (let i = 1; i <= 10; i++) {
+    a.volume = from * (1 - i / 10);
+    await new Promise((r) => setTimeout(r, ms / 10));
+  }
+  a.pause();
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 type Speaking = { id: number; says: string; action: string } | null;
@@ -66,6 +78,7 @@ export default function Classroom() {
   const [reportBusy, setReportBusy] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
+  const [alerts, setAlerts] = useState<Record<number, true>>({});
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [slideFile, setSlideFile] = useState<File | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -88,15 +101,28 @@ export default function Classroom() {
     api.health().then((h) => setBackend(h.mock ? "mock" : "live")).catch(() => setBackend("offline"));
   }, []);
 
-  // --- voices: one student at a time, hand up and waving while they talk ---
+  // --- voices ---
+  // A speaker first shows a "!" for ALERT_MS (so the lecturer sees a question coming), then raises the
+  // hand, then talks with the game-voice sound under their real voice. One student talks at a time.
   const say = useCallback((sp: { id: number; says: string; action: string }) => {
+    const alertAt = performance.now();
+    setAlerts((a) => ({ ...a, [sp.id]: true }));
+    // fetch the voice while the "!" is showing, so they can talk the moment the hand is up
+    const voice = backend === "offline" ? Promise.resolve(null) : api.speak(sp.id, sp.says).catch(() => null);
     speechQueue.current = speechQueue.current.then(async () => {
-      // the hand goes up first, then they talk; the hand stays up at least a moment even if audio fails
-      await sleep(700);
+      await sleep(Math.max(0, alertAt + ALERT_MS - performance.now()));
+      setAlerts((a) => { const n = { ...a }; delete n[sp.id]; return n; });
+      const raises = sp.action !== "whisper_to_neighbour";
+      if (raises) setStudents((s) => ({ ...s, [sp.id]: { ...s[sp.id], state: "hand_raised" } }));
+      await sleep(raises ? 700 : 200);
       setSpeaking(sp);
       const started = performance.now();
+      const sfx = new Audio("/sounds/speak.mp3");
+      sfx.loop = true;
+      sfx.volume = raises ? 0.28 : 0.12;
+      sfx.play().catch(() => {});
       try {
-        const audio = backend === "offline" ? null : await api.speak(sp.id, sp.says).catch(() => null);
+        const audio = await voice;
         await new Promise<void>((done) => {
           if (audio) {
             const a = new Audio(URL.createObjectURL(audio));
@@ -109,6 +135,7 @@ export default function Classroom() {
           } else setTimeout(done, 3000);
         });
       } finally {
+        await fadeOut(sfx);
         await sleep(Math.max(0, 2500 - (performance.now() - started)));
         setSpeaking(null);
         // after asking, the hand comes down
@@ -121,8 +148,10 @@ export default function Classroom() {
   const apply = useCallback((r: ChunkResult) => {
     setStudents((prev) => {
       const next = { ...prev };
-      for (const s of r.students) next[s.id] = s;
-      for (const sp of r.speakers) if (sp.action !== "whisper_to_neighbour") next[sp.id] = { ...next[sp.id], state: "hand_raised" };
+      for (const s of r.students) {
+        // the hand goes up only when it is their turn to talk (after the "!")
+        next[s.id] = s.state === "hand_raised" ? { ...s, state: prev[s.id]?.state === "hand_raised" ? "hand_raised" : "confused" } : s;
+      }
       return next;
     });
     setStats({ attention: r.class_attention, confusion: r.class_confusion, summary: r.summary });
@@ -268,7 +297,6 @@ export default function Classroom() {
   function demoRaiseHand() {
     const candidates = LOOKS.filter((l) => students[l.id].state !== "hand_raised");
     const who = candidates[Math.floor(Math.random() * candidates.length)];
-    setStudents((s) => ({ ...s, [who.id]: { ...s[who.id], state: "hand_raised" } }));
     say({ id: who.id, says: DEMO_QUESTIONS[Math.floor(Math.random() * DEMO_QUESTIONS.length)], action: "raise_hand" });
   }
 
@@ -382,7 +410,7 @@ export default function Classroom() {
                 const st = students[id];
                 const talking = speaking?.id === id;
                 return (
-                  <div key={id} className={styles.seat} title={`${nameOf(id)} · ${st.state.replaceAll("_", " ")}\n${st.reason}`}>
+                  <div key={id} className={`${styles.seat} ${talking || alerts[id] ? styles.onTop : ""}`} title={`${nameOf(id)} · ${st.state.replaceAll("_", " ")}\n${st.reason}`}>
                     {talking && (
                       <div className={`${styles.speech} ${speaking.action === "whisper_to_neighbour" ? styles.whisper : ""}`} role="status">
                         <span className={styles.speechWho}>{nameOf(id)} {speaking.action === "whisper_to_neighbour" ? "whispers" : "asks"}</span>
@@ -390,7 +418,7 @@ export default function Classroom() {
                       </div>
                     )}
                     <div className={styles.figure}>
-                      <Student id={id} state={st.state} waving={talking} />
+                      <Student id={id} state={st.state} waving={talking} alert={!!alerts[id]} />
                     </div>
                     <div className={styles.desk}>
                       <span className={styles.name}>{nameOf(id)}</span>

@@ -321,3 +321,6 @@
 .notes { font-size: 13px; color: var(--muted); }
 .notes summary { cursor: pointer; font-weight: 700; color: var(--ink); min-height: 28px; }
 .notes p { margin: 6px 0 0; max-height: 9em; overflow: auto; line-height: 1.45; white-space: pre-line; }
+
+/* a student about to speak or speaking sits above the desks of the row in front */
+.onTop { z-index: 4; }

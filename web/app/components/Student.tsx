@@ -288,15 +288,29 @@ function Cue({ state, c }: { state: StudentStateName; c: Palette }) {
   }
 }
 
+/** "I have a question" sign, shown a few seconds before the student speaks up. */
+function Exclaim() {
+  return (
+    <g className={styles.exclaim}>
+      <circle cx={100} cy={-26} r={26} fill="#f5b400" />
+      <circle cx={100} cy={-26} r={26} fill="none" stroke="#1d1b2b" strokeWidth={3.5} />
+      <rect x={95} y={-45} width={10} height={24} rx={5} fill="#1d1b2b" />
+      <circle cx={100} cy={-10} r={5.4} fill="#1d1b2b" />
+    </g>
+  );
+}
+
 export interface StudentProps {
   id: number;
   state: StudentStateName;
   /** Make the raised hand wave (while the student is talking). */
   waving?: boolean;
+  /** Show a "!" above the head: this student is about to ask something. */
+  alert?: boolean;
   className?: string;
 }
 
-export default function Student({ id, state, waving, className }: StudentProps) {
+export default function Student({ id, state, waving, alert, className }: StudentProps) {
   const look = LOOKS[id];
   const c = palette(look.hue);
   const pose = POSES[state];
@@ -348,7 +362,7 @@ export default function Student({ id, state, waving, className }: StudentProps) 
           <circle cx={rightHand.x} cy={rightHand.y} r={8.5} fill={c.skin} />
         </>}
         {!pose.handsOnProp && <Prop kind={pose.prop} c={c} />}
-        <Cue state={state} c={c} />
+        {alert ? <Exclaim /> : <Cue state={state} c={c} />}
       </g>
     </svg>
   );

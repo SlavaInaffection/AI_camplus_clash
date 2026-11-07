@@ -63,6 +63,23 @@
   animation: drip 1.6s ease-in infinite;
 }
 
+.exclaim {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: exclaimIn 420ms cubic-bezier(.34, 1.56, .64, 1), exclaimPulse 900ms ease-in-out 420ms infinite;
+}
+
+@keyframes exclaimIn {
+  from { transform: scale(0) translateY(10px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+@keyframes exclaimPulse {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-5px) rotate(-6deg); }
+  75% { transform: translateY(-5px) rotate(6deg); }
+}
+
 .bob { animation: bob 1.6s ease-in-out infinite; }
 .spin { transform-box: fill-box; transform-origin: center; animation: spin 2.4s linear infinite; }
 .twinkle { animation: twinkle 1.1s ease-in-out infinite; }
@@ -141,5 +158,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .body, .head, .wave, .blink, .zzz, .drip, .pop, .fadeIn, .bob, .spin, .twinkle { animation: none !important; }
+  .body, .head, .wave, .blink, .zzz, .drip, .pop, .fadeIn, .bob, .spin, .twinkle, .exclaim { animation: none !important; }
 }
